@@ -10,7 +10,7 @@ The tool has been written to be flexible so that it can run on and against hopef
 
 This system has been tested on the following platforms:
 * CentOS 6.5
-* Ubuntu 12.04
+* Ubuntu 16.04
 * OpenIndiana 151.a8
 * OmniOS r151008 and r151010 [current stable]
 
@@ -64,7 +64,7 @@ Install
 
 download and decompress in any place
 ```
-wget https://github.com/kattunga/zfs-repl/archive/v0.1.tar.gz
+wget https://github.com/kattunga/zfs-repl/archive/v0.2.tar.gz
 tar -xvf v0.1.tar.gz
 sudo mv zfs-repl /opt/
 
