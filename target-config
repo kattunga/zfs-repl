@@ -74,7 +74,6 @@ find_rmt_bins() {
 		x=$(( x + 1 ))
 	done
 	printf -v "${result_var}" '%s' "${paths}"
-	
 }
 
 guess_rmt_bin() {
@@ -107,10 +106,9 @@ usage() {
 	exit 0
 }
 
-declare -a RMT_VARS=('RMT_SUDO=%s' 'RMT_ZFS="$RMT_SUDO %s"' 'RMT_GZIP=%s' 'RMT_XZCAT=%s' 'RMT_NC=%s' 'RMT_SOCAT=%s' 'RMT_MBUFFER=%s' 'RMT_CAT=%s' 'RMT_OPENSSL=%s' )
-EXECS="sudo zfs gzip xzcat nc socat mbuffer cat openssl"
+declare -a RMT_VARS=('RMT_SUDO=%s' 'RMT_ZFS="$RMT_SUDO %s"' 'RMT_MBUFFER=%s' )
+EXECS="sudo zfs mbuffer"
 RMT_BINS=
-CONFIG_PATH=/etc/zfs-repl
  
 while [ $# -gt 0 ];do
 	case $1 in 
@@ -127,8 +125,6 @@ done
 
 [ -z $HOST ] && usage
 
-HOST_CONF=$CONFIG_PATH/$HOST.conf
-
 CONFIG="# remote target for zfs-repl"$'\n'
 
 find_rmt_bins $HOST "$EXECS" "RMT_BINS"
@@ -140,7 +136,14 @@ for v in $RMT_BINS; do
 	i=$(( i + 1 ))
 done
 
-echo "$CONFIG"
+HOST_CONF=$(dirname $0)/hosts
 
+mkdir -p $HOST_CONF
 
+echo "$CONFIG" > $HOST_CONF/$HOST.conf
 
+cat << EOF >> $HOST_CONF/$HOST.conf
+# mbuffer local and remote options
+# see 'man mbuffer' for options
+#RMT_MBUFFER_OPTS= 
+EOF

@@ -1,5 +1,20 @@
 #! /bin/bash
-# creates a configuration for target system that can be piped to a file
+# creates a configuration for source system that can be piped to a file
+
+if [ "$1" = "" ]; then
+  BIN_NAME="zfs-repl"
+else
+  BIN_NAME=$1
+fi
+
+BIN_FILE=$(dirname $0)/$BIN_NAME
+
+if [ ! -f $BIN_FILE ]; then
+  echo "File $BIN_FILE not found"
+  exit 1
+fi
+
+CFG_FILE=$BIN_FILE.conf
 
 find_bins() {
 	# params:
@@ -79,21 +94,12 @@ test_date() {
 	$ex --date="-2 days" > /dev/null 2>&1
 }
 
-usage() {
-	echo "Usage: $(basename $0 .sh)"
-	exit 0
-}
-
-declare -a VARS=('SUDO=%s' 'ZFS="$SUDO %s"' 'GZIP=%s' 'XZ=%s' 'NC=%s' 'SOCAT=%s' 'MBUFFER=%s' 'CAT=%s' 'OPENSSL=%s' 'LOGGER=%s' 'MAILX=%s' 'SHUF=%s' 'DATE=%s')
-#EXECS="sudo zfs zcat xzcat nc socat mbuffer cat openssl logger mailx pv shuf date"
-EXECS="sudo zfs gzip xz nc socat mbuffer cat openssl logger mailx shuf date"
+# set rmt commands too as default
+declare -a VARS=('SUDO=%s' 'ZFS="$SUDO %s"' 'MBUFFER=%s' 'CAT=%s' 'LOGGER=%s' 'MAILX=%s' 'SHUF=%s' 'DATE=%s' 'RMT_SUDO=%s' 'RMT_ZFS="$RMT_SUDO %s"' 'RMT_MBUFFER=%s')
+EXECS="sudo zfs mbuffer cat logger mailx shuf date sudo zfs mbuffer"
 BINS=
-CONFIG_PATH=/etc/zfs-repl
- 
 
-#HOST_CONF=$CONFIG_PATH/$HOST.conf
-
-CONFIG="# local source for zfs-repl"$'\n'
+CONFIG="# commands path for $BIN_NAME"$'\n'
 
 find_bins "$EXECS" "BINS"
 IFS=$'\n'
@@ -104,77 +110,63 @@ for v in $BINS; do
 	i=$(( i + 1 ))
 done
 
-echo "$CONFIG"
+echo "$CONFIG" > $CFG_FILE
 
-tee  << EOF
+cat << EOF >> $CFG_FILE
 ##### settings
-# uncomment the settings below to over ride the defaults in the zfs-repl script
-# settings in this file can be over ridden by command line options to zfs-repl script
+# default settings
+# settings in this file can be over ridden by command line options
 #
-# minimally set the email addresses
+
+# email to send reports
 mail_from=
 mail_to=
 mail_subject="zfs-replication log"
 
-#process files/paths
-LOCK_PATH=/var/lock
-LOG_FILE=/var/log/zfs-repl.log
+# mailx options (check man mailx for see available options)
+# (e.g. mail_opts="-S smtp=<smtp> -S smtp-use-starttls -S ssl-verify=ignore -S smtp-auth=login -S smtp-auth-user=<user> -S smtp-auth-password=<password>")
+mail_opts=
+
+# email repliction log when an error occurs (true/false)
+ERR_MAIL=false
+
+# always email replication log (true/false)
+SENDMAIL=false
 
 #log to syslog (true/false)
-#SYSLOG=true
+SYSLOG=false
 
 #date format used in log file
 # see 'man date' or 'info date' for options
-#DATE_FORMAT="+%Y-%m-%d %H:%M:%S"
+DATE_FORMAT="+%Y-%m-%d %H:%M:%S"
 
 # default transport protocol (see 'zfs-repl --help' for valid options)
-#PROTOCOL=MBUFFER
+PROTOCOL=SSH
 
-# ssh cipher to use
-#SSH_CIPHER="-c blowfish"
+# custom ssh options
+SSH_OPTS=
 
-#netcat local and remote options
-# see 'man nc' for options
-#NC_OPTS=
-#RMT_NC_OPTS="-l"
+# set to true to enable ssh compression
+SSH_COMPRESSION=false
 
-#mbuffer local and remote options
+# mbuffer local and remote options for SSHMBUFFER and MBUFFER protocols
 # see 'man mbuffer' for options
-#MBUFFER_OPTS="-s 128k -m 256M -q -v 1"
-#RMT_MBUFFER_OPTS="-s 128k -m 256M -q -v 1"
+MBUFFER_OPTS="-s 128k -m 10M -q -v 0"
+RMT_MBUFFER_OPTS="-s 128k -m 10M -q"
 
-#socat local and remote options
-# see 'man socat' for options
-#SOCAT_OPTS=
-#RMT_SOCAT_OPTS=
-#socat local and remote TCP transport options
-#SOCAT_TCP_OPTS="retry=5"
-#RMT_SOCAT_TCP_OPTS=
+# seconds to wait for MBUFFER protocol to initiate send/receive connection before timing out
+MBUFFER_INIT_TIMEOUT=120
 
-# seconds to wait for non-ssh protocols to initiate send/receive connection before timing out
-#REPL_INIT_TIMEOUT=120
-
-# default compression tool and compression level (see 'zfs-repl --help' for valid options)
-#COMPRESSION=GZIP
-#COMP_LEVEL=6
-
-# for non-ssh protocols set the default port
+# for MBUFFER protocol set the default port
 # 'auto' picks a number within the range specified in PORT_RANGE
 # this is helpful when your running multiple concurrent replications to the same host
-#PROTOCOL_PORT='auto'
-#PORT_RANGE=60000-65000
+MBUFFER_PORT='auto'
+MBUFFER_PORT_RANGE=60000-65000
 
-# always email replication log (true/false)
-#SENDMAIL=false
-
-# email repliction log when an error occurs (true/false)
-#ERR_MAIL=true
-
-#encrypt replication over non-ssh protocols (true/false)
-#ENCRYPT=false
-
-#encryption password.  if left null/blank, a new password will be generated for each replication session
-#ENCRYPT_PASSWORD=
+# set LOG_FILE
+# to disable set to null (e.g. LOG_FILE= )
 EOF
+
+echo "LOG_FILE=/var/log/$BIN_NAME.log" >> $CFG_FILE
 
 

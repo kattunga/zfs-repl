@@ -61,11 +61,13 @@ For those that pace in front of microwave ovens...
 
 Install
 -------
+
+download and decompress in any place
 ```
-git clone https://github.com/srlefevre/zfs-repl.git
-cd zfs-repl
-sudo cp zfs-repl /usr/local/bin/
-sudo mkdir /etc/zfs-repl
+wget https://github.com/kattunga/zfs-repl/archive/v0.1.tar.gz
+tar -xvf v0.1.tar.gz
+sudo mv zfs-repl /opt/
+
 ```
 
 Configure
@@ -74,13 +76,14 @@ Configure
 Create the configuration files for the source and target systems and then edit the configuration files using your preferred text editor.
 
 ```
-sudo ./source-config > /etc/zfs-repl/zfs-repl.conf
-sudo ./target-config --host [[user@]target-name] > /etc/zfs-repl/[target-name].conf
-sudo nano /etc/zfs-repl/zfs-repl.conf  
+cd /opt/zfs-repl
+sudo ./source-config
+sudo ./target-config --host [[user@]target-name] > hosts/[target-name].conf
+sudo nano zfs-repl.conf  
 ```
 
 ###zfs-repl.conf
-The /etc/zfs-repl/zfs-repl.conf file is a simple way to configure the script without having to edit the code directly.  The main thing that is needed is to specify the full path to each command.  The 'source-config' and 'target-config' scripts will handle most of this for you.  Please check to ensure DATE points to the GNU date command in the zfs-repl.conf file.
+The zfs-repl.conf file is a simple way to configure the script without having to edit the code directly.  The main thing that is needed is to specify the full path to each command.  The 'source-config' and 'target-config' scripts will handle most of this for you.  Please check to ensure DATE points to the GNU date command in the zfs-repl.conf file.
 
 Minimally, in /etc/zfs-repl/zfs-repl.conf you need to specify 
 * the email addresses you want to use to email errors/logs from and to 
@@ -104,9 +107,7 @@ Create the log file with:
 sudo touch /var/log/zfs-repl.log
 ```
 
-
-You can also specify global default settings in the /etc/zfs-repl/zfs-repl.conf. 
-
+You can also specify global default settings in zfs-repl.conf. 
 
 
 ###[target-name].conf
@@ -124,8 +125,8 @@ If you need to replicate to more then one host, make sure you run the 'target-co
 
 ```
 sudo su
-./target-config --host repl@host1 > /etc/zfs-repl/host1.conf
-./target-config --host root@host2 > /etc/zfs-repl/host2.conf
+./target-config --host repl@host1 > hosts/host1.conf
+./target-config --host root@host2 > hosts/host2.conf
 exit
 ```
 
@@ -136,25 +137,19 @@ Usage
 See 'zfs-repl --help'.
 
 *Example 1:*
-Source system hostX needs to backup the every changing file system pool0/data01 to the target system hostZ under tank1/backup/data01.  hostX wants to maintain a rolling two days of snapshots but hostZ needs to maintain seven days of snapshots.  Snapshots need to be taken and replicated every hour using netcat transport protocol with gzip compression.  Further, hostZ needs to compress the backup file system using lz4.
+Source system hostX needs to backup the every changing file system pool0/data01 to the target system hostZ under tank1/backup/data01.  hostX wants to maintain a rolling two days of snapshots but hostZ needs to maintain seven days of snapshots.  Snapshots need to be taken and replicated every hour.  Further, hostZ needs to compress the backup file system using lz4.
 
 On hostZ, at least zpool tank1 should already be created but tank1/backup/data01 should not.
 
 Initial replication from hostX as root
 ```
-# zfs-repl --host repl@hostZ --source pool0/data01 --dest tank1/backup/data01 --create-dest --dest-opt compression=lz4 --protocol NETCAT --compression GZIP 
+# zfs-repl --host repl@hostZ --source pool0/data01 --dest tank1/backup/data01 --create-dest --dest-opt compression=lz4
 ```
-N.B. If pv (pipeview) is installed, you can add the '--stats' option to see how the replication progresses.
-
 
 Hourly snapshot replication crontab entry
 ```
-0 * * * *  /usr/local/bin/zfs-repl --host repl@hostZ --source pool0/data01 --dest tank1/backup/data01  --protocol NETCAT --compression GZIP --snap-retain "-2 days" --dest-snap-retain "-7 days"
+0 * * * *  /usr/local/bin/zfs-repl --host repl@hostZ --source pool0/data01 --dest tank1/backup/data01 --snap-retain "-2 days" --dest-snap-retain "-7 days"
 ```
-
-
-More examples to be added later.
-
 
 Notes
 =====
@@ -162,6 +157,6 @@ Notes
 mbuffer
 -------
 
-mbuffer is available on many *nix distrobutions as part of the base operating system.  On Red Hat EL6/CentOS 6 and other derived linux distrobutions, it is not included.  I was able to find mbuffer from Fedora Core 13 works on CentOS 6 without issue.
+mbuffer is available on many *nix distrobutions as part of the base operating system.  On Red Hat EL6/CentOS 6 and other derived linux distrobutions, it is not included. I was able to find mbuffer from Fedora Core 13 works on CentOS 6 without issue.
 
 
