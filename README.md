@@ -143,12 +143,12 @@ On hostZ, at least zpool tank1 should already be created but tank1/backup/data01
 
 Initial replication from hostX as root
 ```
-# zfs-repl --host repl@hostZ --source pool0/data01 --dest tank1/backup/data01 --create-dest --dest-opt compression=lz4
+/opt/zfs-repl/zfs-repl --host repl@hostZ --source pool0/data01 --dest tank1/backup/data01 --create-dest --dest-opt compression=lz4
 ```
 
 Hourly snapshot replication crontab entry
 ```
-0 * * * *  /usr/local/bin/zfs-repl --host repl@hostZ --source pool0/data01 --dest tank1/backup/data01 --snap-retain "-2 days" --dest-snap-retain "-7 days"
+0 * * * *  /opt/zfs-repl/zfs-repl --host repl@hostZ --source pool0/data01 --dest tank1/backup/data01 --snap-retain "-2 days" --dest-snap-retain "-7 days"
 ```
 
 Notes
