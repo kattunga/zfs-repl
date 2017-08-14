@@ -208,9 +208,6 @@ RMT_MAX_TIME=
 VERBOSE=
 MOUNT=false
 CLEAN=false
-INVERT_CLEAN=false
-CLEAN_AFTER=false
-FORCE_CLEAN=false
 SNAPSHOT=true
 RECURSIVE_SNAP=
 RECURSIVE_REPL=
@@ -292,9 +289,6 @@ usage() {
 	echo "  -F --force-recv         Force receive on target dataset. See 'man zfs -F'"
 	echo "  -v --verbose            verbose"
 	echo "  -c --clean-snaps        clean snapshots in target that are not in source before replication"
-	echo "     --invert-clean       reverse the --clean-snaps logic so snapshot prefix is not deleted"
-	echo "     --clean-after        clean snapshots in target that are not in source after replication"
-	echo "     --force-clean        use w/ --clean-snaps to force target snapshot deletion ignores if snap is in source"
 	echo "  -n --no-snap            do not snapshot"
 	echo "  -r --no-repl            do not replicate"
 	echo "  -z --create-dest        create target file system/dataset"
@@ -641,82 +635,27 @@ replicate_fs() {
 
 #######################################################################################
 #
-# Function build transport protocol, etc pipelines
-#
-build_pipelines() {
-
-	case $PROTOCOL in
-		MBUFFER)
-			PROTOCOL_SRC_PIPE="$MBUFFER $MBUFFER_OPTS -O $TGT_HOST:$MBUFFER_PORT"
-			PROTOCOL_DST_PIPE="$RMT_MBUFFER $RMT_MBUFFER_OPTS -I $MBUFFER_PORT"
-			;;
-		*)
-			unset PROTOCOL_SRC_PIPE
-			unset PROTOCOL_DST_PIPE
-			;;
-	esac
-	
-	# construct the pipelines now
-	SRC_PIPELINE[0]="$ZFS_SEND"
-	if [ ! -z "$PROTOCOL_SRC_PIPE" ]; then
-		SRC_PIPELINE[${#SRC_PIPELINE[@]}]="$PROTOCOL_SRC_PIPE"
-	fi
-	if [ ! -z "$PROTOCOL_DST_PIPE" ]; then
-		DST_PIPELINE[${#DST_PIPELINE[@]}]="$PROTOCOL_DST_PIPE"
-	fi
-	DST_PIPELINE[${#DST_PIPELINE[@]}]="$ZFS_RECV"
-
-	# Build commands to eval
-	SRC_PIPELINE_CMDS="${SRC_PIPELINE[0]}"
-	pl=${#SRC_PIPELINE[@]}
-	for (( i=1; i<${pl}; i++ ));
-	do
-		SRC_PIPELINE_CMDS="${SRC_PIPELINE_CMDS} | ${SRC_PIPELINE[$i]}"
-	done
-
-	DST_PIPELINE_CMDS="${DST_PIPELINE[0]}"
-	pl=${#DST_PIPELINE[@]}
-	for (( i=1; i<${pl}; i++ ));
-	do
-		DST_PIPELINE_CMDS="${DST_PIPELINE_CMDS} | ${DST_PIPELINE[$i]}"
-	done
-
-	# pipelines built
-}
-
-#######################################################################################
-#
 # Function to clean up snapshots that are in target host but not in source
 #   CLI options/switches change logic/behavior of this function
-#   --prefix - limits deletion for target snaps to matching prefix'd snaps
-#   --invert-clean with --prefix - deletes target snaps that don't have the specified prefix
-#   --invert-clean w/out --prefix - does not affect logic of target snaps deletion
 #   --recurse - causes target snaps to be searched recursively for deletion evaluation
-#   --force-clean - deletes target snaps that match criteria ignoring if source has snap
 #
 clean_remote_snaps() {
-	local GREP_OPT=""
 	local RECUSIVE_SEARCH=""
-	
-	# invert snapshot selection with 'grep -v'
-	if [ $INVERT_CLEAN == true ]; then
-		GREP_OPT="-v"
-	fi
 	
 	if [ -n $RECURSIVE_SNAP ]; then
 		RECUSIVE_SEARCH=".*"
 	fi
 
-	ssnap_list=$($ZFS list -H -o name -t snapshot | grep ^$SRC_PATH | grep $GREP_OPT ^$SRC_PATH${RECUSIVE_SEARCH}\@${SNAP_PREF})
+	ssnap_list=$($ZFS list -H -o name -t snapshot | grep ^$SRC_PATH | grep ^$SRC_PATH${RECUSIVE_SEARCH}\@)
 
-	ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -H -o name -t snapshot | grep ^$TGT_PATH | grep $GREP_OPT ^$TGT_PATH${RECUSIVE_SEARCH}\@${SNAP_PREF} > $DSNAP_LIST
+	ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -H -o name -t snapshot | grep ^$TGT_PATH | grep ^$TGT_PATH${RECUSIVE_SEARCH}\@ > $DSNAP_LIST
 	
 	while read dsnap
 	do
 		# replace target path with source path
 		SnapName=${SRC_PATH}${dsnap:${#TGT_PATH}}
 
-		if [ $FORCE_CLEAN == true ] || [ $(echo $ssnap_list | grep -c ${SnapName}) -eq 0 ]; then
+		if [ $(echo $ssnap_list | grep -c ${SnapName}) -eq 0 ]; then
 			log "-> Destroying snapshot $dsnap on $TGT_HOST"
 			log "-> $(ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS destroy $dsnap)"
 		fi
@@ -884,15 +823,6 @@ while [ $# -gt 0 ];do
          -c|--clean-snaps)
             CLEAN=true
             ;;
-         --invert-clean)
-            INVERT_CLEAN=true
-            ;;
-         --clean-after)
-            CLEAN_AFTER=true
-            ;;
-         --force-clean)
-            FORCE_CLEAN=true
-            ;; 
          -n|--no-snap)
             SNAPSHOT=false
             ;;
@@ -1034,12 +964,6 @@ if [ $REPLICATE == true ]; then
 		replicate_fs repl 2> $ERR_FILE
 		check_for_error
 
-		# Clean up any snapshots in target that is not in source
-		if [ $CLEAN_AFTER == true ]; then
-			clean_remote_snaps 2> $ERR_FILE
-			check_for_error
-		fi
-		
 		# Clean up any snapshots that are old.
 		if [ "$MAX_TIME" != "" ]; then
 			clean_old_snaps 2> $ERR_FILE
