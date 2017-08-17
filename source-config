@@ -118,7 +118,7 @@ cat << EOF >> $CFG_FILE
 # settings in this file can be over ridden by command line options
 #
 
-# email to send reports
+# email to send reports, if "mail_to" is not defined mailx is not used, only NOTIFY_COMMAND and ERROR_COMMAND are executed
 mail_from=
 mail_to=
 mail_subject="zfs-replication log"
@@ -132,6 +132,12 @@ ERR_MAIL=false
 
 # always email replication log (true/false)
 SENDMAIL=false
+
+# commands to execute when sending mail, it can be used with or without mailx (if mailx is not available or mail_to is not defined)
+# you can use the vars $ERR_FILE and $EMAIL_LOG in the hook
+# example: "/usr/local/sbin/telegram-notify --text $ERR_FILE"
+NOTIFY_COMMAND=""
+ERROR_COMMAND=""
 
 #log to syslog (true/false)
 SYSLOG=false
@@ -147,7 +153,7 @@ PROTOCOL=SSH
 SSH_OPTS=
 
 # set to true to enable ssh compression
-SSH_COMPRESSION=true
+SSH_COMPRESSION=false
 
 # mbuffer local and remote options for SSHMBUFFER and MBUFFER protocols
 # see 'man mbuffer' for options
