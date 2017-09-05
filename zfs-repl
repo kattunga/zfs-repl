@@ -205,6 +205,8 @@ SSH_TGT_HOST=
 SSH_TGT_PORT=
 SRC_PATH=
 TGT_PATH=
+TGT_CLONE=
+TGT_CLONE_OPTS=
 SNAP_PREF=
 MAX_TIME=
 RMT_MAX_TIME=
@@ -291,6 +293,7 @@ usage() {
 	echo "                           e.g. \"7 days ago\", \"12 hours ago\" (default infinite)"
 	echo "  -T --dest-snap-retain   max time to preserve snapshots on target. (default to --snap-retain)"
 	echo "                           (see -t option for examples)"
+	echo "     --dest-clone         create a clone of last snapshot with name specified"
 	echo "  -R --recurse            recursively create and replicate snapshots of all descendent datasets"
 	echo "  -F --force-recv         Force receive on target dataset. See 'man zfs -F'"
 	echo "  -v --verbose            verbose"
@@ -752,6 +755,57 @@ clean_remote_snaps() {
 
 #######################################################################################
 #
+# Function to create a clone of the last available snapshot
+# if clone exists it is destroyed
+#
+clone_remote_last_snap() {
+
+	# find last remote snap using prefix
+	if [ $DEBUG = true ]; then
+		log "DEBUG: Checking last remote snapshot for clone"
+	fi
+	last_snap_target=$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -H -o name -r -t snapshot 2> $ERR_FILE | grep $TGT_PATH\@${SNAP_PREF} | tail -1 )
+	check_for_error
+
+	if [ "$last_snap_target" == "" ]; then
+		log_error "There is no snapshots in target filesystem $TGT_PATH\@${SNAP_PREF}"
+	else
+		# check if target clone already exist
+		if [ $DEBUG = true ]; then
+			log "DEBUG: Checking if clone already exists"
+		fi
+		clone_exists=$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -H -o name -r 2> $ERR_FILE | grep $TGT_CLONE | tail -1 )
+		check_for_error
+
+		# if exists, check if it is a clone and destroy it, else raise error
+		if [ "$clone_exists" == "$TGT_CLONE" ]; then
+			if [ $DEBUG = true ]; then
+				log "DEBUG: Clone already exist, verifying it is a clone"
+			fi
+			clone_source=$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS get -H -o value origin $TGT_CLONE 2> $ERR_FILE )
+			check_for_error
+
+			if [ "$clone_source" == "-" ]; then
+				log_error "A target filesystem exist with same name as required clone"
+			else
+				log "-> Destroying existing clone"
+				ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS destroy $TGT_CLONE 2> $ERR_FILE
+				check_for_error
+				clone_exists=""
+			fi
+		fi
+
+		# if not exists, clone now
+		if [ "$clone_exists" != "$TGT_CLONE" ]; then
+			log "-> Creating target clone $TGT_CLONE"
+			ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS clone $last_snap_target $TGT_CLONE $TGT_CLONE_OPTS 2> $ERR_FILE
+			check_for_error
+		fi
+	fi
+}
+
+#######################################################################################
+#
 # Function to clean up snapshots that are older than X days old. X being the 
 # value set by "MAX_TIME" on both the source and destination hosts.
 # the last snapshot should not be deleted, at least one snapshot must be keeped
@@ -899,7 +953,20 @@ while [ $# -gt 0 ];do
          		echo "Incorrect zfs create property $1. Please see 'man zfs' for details and syntax."
          		usage
          	fi
-             ;;
+            ;;
+         --dest-clone)
+            shift
+            TGT_CLONE=$1
+            ;;
+         --dest-clone-opt)
+         	shift
+         	if [[ $1 == *=* ]]; then
+         		ZFS_CLONE_OPTS="$ZFS_CLONE_OPTS -o $1"
+         	else
+         		echo "Incorrect zfs create property $1. Please see 'man zfs' for details and syntax."
+         		usage
+         	fi
+            ;;
          -v|--verbose)
             VERBOSE=-v
             ;;
@@ -1065,6 +1132,12 @@ if [ $REPLICATE == true ]; then
 		# Clean up any snapshots that are old.
 		if [ "$MAX_TIME" != "" ]; then
 			clean_old_snaps 2> $ERR_FILE
+			check_for_error
+		fi
+
+		# clone last snapshot
+		if [ "$TGT_CLONE" != "" ]; then
+			clone_remote_last_snap 2> $ERR_FILE
 			check_for_error
 		fi
 	fi
