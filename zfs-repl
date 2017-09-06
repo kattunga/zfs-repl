@@ -797,7 +797,7 @@ clone_remote_last_snap() {
 
 		# if not exists, clone now
 		if [ "$clone_exists" != "$TGT_CLONE" ]; then
-			log "-> Creating target clone $TGT_CLONE"
+			log "-> Creating target clone $TGT_CLONE $TGT_CLONE_OPTS"
 			ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS clone $last_snap_target $TGT_CLONE $TGT_CLONE_OPTS 2> $ERR_FILE
 			check_for_error
 		fi
@@ -961,7 +961,7 @@ while [ $# -gt 0 ];do
          --dest-clone-opt)
          	shift
          	if [[ $1 == *=* ]]; then
-         		ZFS_CLONE_OPTS="$ZFS_CLONE_OPTS -o $1"
+         		TGT_CLONE_OPTS="$TGT_CLONE_OPTS -o $1"
          	else
          		echo "Incorrect zfs create property $1. Please see 'man zfs' for details and syntax."
          		usage
