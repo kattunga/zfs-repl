@@ -232,6 +232,7 @@ LOCK_PATH=/var/lock
 
 TMP_PATH=/tmp/$(basename $0 .sh).$$
 RSYNC_LOG=$TMP_PATH/rsync.stats
+EMAIL_MSG_OK=$TMP_PATH/emailok
 ERR_FILE=$TMP_PATH/error
 EMAIL_LOG=$TMP_PATH/emaillog
 DSNAP_LIST=$TMP_PATH/snaplist-target.lst
@@ -490,16 +491,17 @@ send_email_log() {
 				[ $DEBUG = true ] && echo "DEBUG: Sent email to $mail_to."
 			fi
 
-			# notification command
-			if [[ $SENDMAIL == true && "$NOTIFY_COMMAND" != "" ]]; then
-				$NOTIFY_COMMAND > /dev/null
-				[ $DEBUG = true ] && echo "DEBUG: notification command executed $NOTIFY_COMMAND"
-			fi
-
 			# error command
-			if [[ $ERR_MAIL == true && "$ERROR_COMMAND" != "" ]]; then
-				$ERROR_COMMAND > /dev/null
-				[ $DEBUG = true ] && echo "DEBUG: notification command executed $ERROR_COMMAND"
+			if [[ $ERR_MAIL == true && "$ERROR_COMMAND" != "" && -s $ERR_FILE ]]; then
+				eval $ERROR_COMMAND > /dev/null
+				[ $DEBUG = true ] && log "DEBUG: notification command executed $ERROR_COMMAND"
+
+			# notification command
+			else
+				if [[ $SENDMAIL == true && "$NOTIFY_COMMAND" != "" ]]; then
+					eval $NOTIFY_COMMAND > /dev/null
+					[ $DEBUG = true ] && log "DEBUG: notification command executed $NOTIFY_COMMAND"
+				fi
 			fi
 
 			# send email only once
@@ -1040,6 +1042,12 @@ LOCK_FILE=$LOCK_PATH/$(basename $0 .sh)-${src_path_hash}
 # create isolated tmp directory
 mkdir -p $TMP_PATH > /dev/null 2>&1
 [ $DEBUG = true ] && log "TMP_PATH = $TMP_PATH"
+
+# save target name as first line of email log
+log "Target host: $TGT_HOST"
+
+# file for simple ok message
+echo "Replication to $TGT_HOST ok" > $EMAIL_MSG_OK
 
 #register exit/clean up tasks
 on_exit_run replication_status
