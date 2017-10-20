@@ -804,8 +804,8 @@ clone_source_last_snap() {
 
 		# if not exists, clone now
 		if [ "$clone_exists" != "$SRC_CLONE" ]; then
-			log "-> Creating target clone $SRC_CLONE $SRC_CLONE_OPTS"
-			$ZFS clone $last_snap_target $SRC_CLONE $SRC_CLONE_OPTS 2> $ERR_FILE
+			log "-> Creating source clone $SRC_CLONE $SRC_CLONE_OPTS"
+			$ZFS clone $last_snap_source $SRC_CLONE $SRC_CLONE_OPTS 2> $ERR_FILE
 			check_for_error
 		fi
 	fi
