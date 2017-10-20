@@ -204,6 +204,8 @@ TGT_HOST=
 SSH_TGT_HOST=
 SSH_TGT_PORT=
 SRC_PATH=
+SRC_CLONE=
+SRC_CLONE_OPTS=
 TGT_PATH=
 TGT_CLONE=
 TGT_CLONE_OPTS=
@@ -294,8 +296,14 @@ usage() {
 	echo "                           e.g. \"7 days ago\", \"12 hours ago\" (default infinite)"
 	echo "  -T --dest-snap-retain   max time to preserve snapshots on target. (default to --snap-retain)"
 	echo "                           (see -t option for examples)"
-	echo "     --dest-clone         create a clone of last snapshot with name specified"
+	echo "  -O --dest-opt           options to apply to zfs command when creating dataset. Repeat for each option"
+	echo "                           same options as 'zfs create -o' (see man zfs) "
+	echo "                           e.g. -O compression=lz4 -O dedupe=on -O recordsize=4k"
 	echo "  -R --recurse            recursively create and replicate snapshots of all descendent datasets"
+	echo "     --dest-clone         create a clone of last target snapshot with name specified"
+	echo "     --dest-clone-opt     options to apply to zfs command when creating a target clone. see --dest-opt"
+	echo "     --source-clone       create a clone of last snapshot with name specified"
+	echo "     --source-clone-opt   options to apply to zfs command when creating clone. see --dest-opt"
 	echo "  -F --force-recv         Force receive on target dataset. See 'man zfs -F'"
 	echo "  -v --verbose            verbose"
 	echo "  -c --clean-snaps        clean snapshots in target that are not in source before replication"
@@ -306,9 +314,6 @@ usage() {
 	echo "  -r --no-repl            do not replicate"
 	echo "  -z --create-dest        create target file system/dataset"
 	echo "     --mount-dest         leave mountpoint untouched in target"
-	echo "  -O --dest-opt           options to apply to zfs command when creating dataset. Repeat for each option"
-	echo "                           same options as 'zfs create -o' (see man zfs) "
-	echo "                           e.g. -O compression=lz4 -O dedupe=on -O recordsize=4k"
 	echo "  -o --protocol           replication transport protocol"
 	echo "      SSH                 Secure and can compress. Recomended for low latency and stable wan"
 	echo "      SSHMBUFFER          Secure, can compress and has buffering. Recommended for high latency wan"
@@ -760,6 +765,57 @@ clean_remote_snaps() {
 # Function to create a clone of the last available snapshot
 # if clone exists it is destroyed
 #
+clone_source_last_snap() {
+
+	# find last remote snap using prefix
+	if [ $DEBUG = true ]; then
+		log "DEBUG: Checking last remote snapshot for clone"
+	fi
+	last_snap_source=$( $ZFS list -H -o name -r -t snapshot 2> $ERR_FILE | grep $SRC_PATH\@${SNAP_PREF} | tail -1 )
+	check_for_error
+
+	if [ "$last_snap_source" == "" ]; then
+		log_error "There is no snapshots in source filesystem $SRC_PATH\@${SNAP_PREF}"
+	else
+		# check if target clone already exist
+		if [ $DEBUG = true ]; then
+			log "DEBUG: Checking if clone already exists"
+		fi
+		clone_exists=$( $ZFS list -H -o name -r 2> $ERR_FILE | grep $SRC_CLONE | tail -1 )
+		check_for_error
+
+		# if exists, check if it is a clone and destroy it, else raise error
+		if [ "$clone_exists" == "$SRC_CLONE" ]; then
+			if [ $DEBUG = true ]; then
+				log "DEBUG: Clone already exist, verifying it is a clone"
+			fi
+			clone_source=$( $ZFS get -H -o value origin $SRC_CLONE 2> $ERR_FILE )
+			check_for_error
+
+			if [ "$clone_source" == "-" ]; then
+				log_error "A source filesystem exist with same name as required clone"
+			else
+				log "-> Destroying existing clone"
+				$ZFS destroy $SRC_CLONE 2> $ERR_FILE
+				check_for_error
+				clone_exists=""
+			fi
+		fi
+
+		# if not exists, clone now
+		if [ "$clone_exists" != "$SRC_CLONE" ]; then
+			log "-> Creating target clone $SRC_CLONE $SRC_CLONE_OPTS"
+			$ZFS clone $last_snap_target $SRC_CLONE $SRC_CLONE_OPTS 2> $ERR_FILE
+			check_for_error
+		fi
+	fi
+}
+
+#######################################################################################
+#
+# Function to create a clone of the last remote available snapshot
+# if clone exists it is destroyed
+#
 clone_remote_last_snap() {
 
 	# find last remote snap using prefix
@@ -969,6 +1025,19 @@ while [ $# -gt 0 ];do
          		usage
          	fi
             ;;
+         --source-clone)
+            shift
+            SRC_CLONE=$1
+            ;;
+         --source-clone-opt)
+         	shift
+         	if [[ $1 == *=* ]]; then
+         		SRC_CLONE_OPTS="$SRC_CLONE_OPTS -o $1"
+         	else
+         		echo "Incorrect zfs create property $1. Please see 'man zfs' for details and syntax."
+         		usage
+         	fi
+            ;;
          -v|--verbose)
             VERBOSE=-v
             ;;
@@ -1047,7 +1116,7 @@ mkdir -p $TMP_PATH > /dev/null 2>&1
 log "Target host: $TGT_HOST"
 
 # file for simple ok message
-echo "Replication to $TGT_HOST ok" > $EMAIL_MSG_OK
+echo "Replication of $SRC_PATH to $TGT_HOST ok" > $EMAIL_MSG_OK
 
 #register exit/clean up tasks
 on_exit_run replication_status
@@ -1143,7 +1212,7 @@ if [ $REPLICATE == true ]; then
 			check_for_error
 		fi
 
-		# clone last snapshot
+		# clone last target snapshot
 		if [ "$TGT_CLONE" != "" ]; then
 			clone_remote_last_snap 2> $ERR_FILE
 			check_for_error
@@ -1155,6 +1224,12 @@ else
 		clean_old_snaps 2> $ERR_FILE
 		check_for_error
 	fi
+fi
+
+# clone last source snapshot
+if [ "$SRC_CLONE" != "" ]; then
+	clone_source_last_snap 2> $ERR_FILE
+	check_for_error
 fi
 
 exit 0
