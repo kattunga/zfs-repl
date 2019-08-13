@@ -66,7 +66,7 @@ download and decompress in any place
 ```
 wget https://github.com/kattunga/zfs-repl/archive/v0.2.tar.gz
 tar -xvf v0.2.tar.gz
-sudo mv zfs-repl /opt/
+sudo mv zfs-repl-0.2 /opt/zfs-repl
 
 ```
 
