@@ -122,7 +122,7 @@ cat << EOF >> $CFG_FILE
 NOTIFY_ON_SUCCESS=false
 
 # notify on error (true/false)
-NOTIFY_ON_ERROR=false
+NOTIFY_ON_ERROR=true
 
 # commands to execute on notification
 # you can use the vars $LOG_ERROR_FILE and $LOG_SUCCESS_FILE in the hook
