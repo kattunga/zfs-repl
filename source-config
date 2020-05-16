@@ -139,7 +139,7 @@ NOTIFY_SUCCESS_COMMAND=""
 NOTIFY_ERROR_COMMAND=""
 
 # log to syslog (true/false)
-SYSLOG=false
+SYSLOG=true
 
 #date format used in log file
 # see 'man date' or 'info date' for options
