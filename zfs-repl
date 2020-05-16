@@ -314,9 +314,9 @@ usage() {
 	echo "  -C --compression        enable compression on SSH protocol replication"
 	echo "  -P --mbuffer-port       replication port for MBUFFER protocol. (default: auto)"
 	echo "  -q --quiet              quiet. suppress output to stdout. usefull for cron jobs"
-	echo "  -m --email-errors       email on errors"
-	echo "  -M --email              always email log"
-	echo "     --no-email           never email log"
+	echo "     --notify-errors      execute notification command on errors"
+	echo "     --notify             execute notification command on success"
+	echo "     --no-notify          deactivate notification commands"
 	echo "  -D --debug              show diagnositc information"
 	echo "  -h --help               display usage options "
 	exit 
@@ -421,7 +421,7 @@ replication_status() {
 check_for_error() {
 	if [ -s "$LOG_ERROR_FILE" ]; then
 		log "$(cat $LOG_ERROR_FILE)"
-		send_email_log
+		execute_notification
 		exit 1
 	fi
 }
@@ -475,9 +475,9 @@ log() {
 
 #######################################################################################
 #
-# Function email log file
+# Function execute notification commands file
 #
-send_email_log() {
+execute_notification() {
 	if [ $NOTIFICATION_SENT = false ]; then
 		if [[ ( $NOTIFY_ON_SUCCESS == true || ( $NOTIFY_ON_ERROR == true && -s $LOG_ERROR_FILE ) ) ]]; then
 
@@ -494,7 +494,7 @@ send_email_log() {
 				fi
 			fi
 
-			# send email only once
+			# execute notification only once
 			NOTIFICATION_SENT=true
 		fi
 	fi
@@ -1044,13 +1044,13 @@ while [ $# -gt 0 ];do
          -r|--no-repl)
             REPLICATE=false
             ;;
-         -m|--email-errors)
+         --notify-errors)
             NOTIFY_ON_ERROR=true
             ;;
-         -M|--email)
+         --notify)
             NOTIFY_ON_SUCCESS=true
             ;;
-         --no-email)
+         --no-notify)
             NOTIFY_ON_ERROR=false
             NOTIFY_ON_SUCCESS=false
             ;;
@@ -1107,7 +1107,7 @@ echo "Replication of $SRC_PATH to $TGT_HOST ok" > $LOG_SUCCESS_FILE
 #register exit/clean up tasks
 on_exit_run replication_status
 on_exit_run	log "End ------------------------------------------------------------"
-on_exit_run send_email_log
+on_exit_run execute_notification
 [ $DEBUG = false ] && on_exit_run rm -rf $TMP_PATH
 
 # check and complete parameters
