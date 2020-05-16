@@ -125,7 +125,8 @@ NOTIFY_ON_SUCCESS=false
 NOTIFY_ON_ERROR=true
 
 # commands to execute on notification
-# you can use the vars $LOG_ERROR_FILE and $LOG_SUCCESS_FILE in the hook
+# you can use the vars $LOG_ERROR_FILE, $LOG_SUCCESS_FILE and $LOG_FILE in the hook
+# you can find this files in /tmp/zfs_rpl.xxxx
 # examples:
 #
 # NOTIFY_SUCCESS_COMMAND="/usr/local/sbin/telegram-notify --title <hostname> --success --text \$LOG_SUCCESS_FILE"
@@ -167,8 +168,6 @@ MBUFFER_INIT_TIMEOUT=120
 MBUFFER_PORT='auto'
 MBUFFER_PORT_RANGE=60000-65000
 
-# set LOG_FILE
-# to disable set to null (e.g. LOG_FILE= )
 EOF
 
 echo "LOG_FILE=/var/log/$BIN_NAME.log" >> $CFG_FILE
