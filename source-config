@@ -170,6 +170,5 @@ MBUFFER_PORT_RANGE=60000-65000
 
 EOF
 
-echo "LOG_FILE=/var/log/$BIN_NAME.log" >> $CFG_FILE
 
 
