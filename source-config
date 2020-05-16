@@ -131,8 +131,8 @@ NOTIFY_ON_ERROR=true
 # NOTIFY_SUCCESS_COMMAND="/usr/local/sbin/telegram-notify --title <hostname> --success --text \$LOG_SUCCESS_FILE"
 # NOTIFY_ERROR_COMMAND="/usr/local/sbin/telegram-notify --title <hostname> --error --text \$LOG_ERROR_FILE"
 #
-# NOTIFY_SUCCESS_COMMAND="cat \"\$LOG_SUCCESS_FILE\" | sendmail -F <from email> <to email>"
-# NOTIFY_ERROR_COMMAND="cat \"\$LOG_ERROR_FILE\" | sendmail -F <from email> <to email>"
+# NOTIFY_SUCCESS_COMMAND="cat \$LOG_SUCCESS_FILE | sendmail -F <from email> <to email>"
+# NOTIFY_ERROR_COMMAND="cat \$LOG_ERROR_FILE | sendmail -F <from email> <to email>"
 #
 NOTIFY_SUCCESS_COMMAND=""
 NOTIFY_ERROR_COMMAND=""
