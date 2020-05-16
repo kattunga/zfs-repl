@@ -9,20 +9,14 @@ This tool/script will create and replicate ZFS datasets/file systems using snaps
 The tool has been written to be flexible so that it can run on and against hopefully any *nix system that supports ZFS storage pools.
 
 This system has been tested on the following platforms:
-* CentOS 6.5
-* Ubuntu 16.04
-* OpenIndiana 151.a8
-* OmniOS r151008 and r151010 [current stable]
+* Ubuntu 16.04, 18.04, 20.04
 
 
 Background/History
 ==================
 This script is a fork/modification of others prior work.  Specifically, the work of 
 - Mike La Spina
-- kattunga
-
-I've simply polished the script and added a few features.
-
+- srlefevre
 
 Prerequisites
 ===========
@@ -37,24 +31,6 @@ Prerequisites
 7. The user on source system can ssh to target system using public/private keys without prompting for a password (e.g. 'ssh repl-user@target')
 8. Source system has GNU date command installed.  (This is needed to handle aging/deletion of snapshots)
 
-(Optionally) The following commands are installed on both source and target systems:
-
-|Feature/Capability | Source system | Target system |
-|-------------------|---------------|---------------|
-|Compression | gzip | gzip |
-| | xz | xzcat |
-|Transport Protcols | nc | nc |
-| | socat | socat |
-| | mbuffer | mbuffer |
-|Encryption | openssl | openssl |
-|Transfer Stats | pv | - |
-|Automatic Port Selection | shuf | - |
-|Log to syslog | logger | - |
-|Email logs/errors | mailx | - |
-
-Use the package manager for your system to install the required and optional commands (e.g. yum, apt-get, pkg)
-
-
 Setup
 =====
 For those that pace in front of microwave ovens...
@@ -62,64 +38,40 @@ For those that pace in front of microwave ovens...
 Install
 -------
 
-download and decompress in any place
-```
-wget https://github.com/kattunga/zfs-repl/archive/v0.2.tar.gz
-tar -xvf v0.2.tar.gz
-sudo mv zfs-repl-0.2 /opt/zfs-repl
+All commands should be executed as root or with sudo.
 
+download in any place
+```
+cd /opt
+git clone https://github.com/kattunga/zfs-repl.git
 ```
 
 Configure
 ---------
 
-Create the configuration files for the source and target systems and then edit the configuration files using your preferred text editor.
+Create the configuration file and then edit the configuration file using your preferred text editor.
 
 ```
-cd /opt/zfs-repl
-sudo ./source-config
-sudo ./target-config --host [[user@]target-name] > hosts/[target-name].conf
-sudo nano zfs-repl.conf  
+./source-config
+nano zfs-repl.conf  
 ```
 
-###zfs-repl.conf
-The zfs-repl.conf file is a simple way to configure the script without having to edit the code directly.  The main thing that is needed is to specify the full path to each command.  The 'source-config' and 'target-config' scripts will handle most of this for you.  Please check to ensure DATE points to the GNU date command in the zfs-repl.conf file.
-
-Minimally, in /etc/zfs-repl/zfs-repl.conf you need to specify 
-* the email addresses you want to use to email errors/logs from and to 
-* the lock path and log file
+Optionally, if target host is a different platform/os version, you shoud create a custom target configuration file
 
 ```
-# email settings
-mail_from=root@example.com
-mail_to=user@example.com
-mail_subject=zfs-replication
-
-#process files/paths
-LOCK_PATH=/var/lock
-LOG_FILE=/var/log/zfs-repl.log
-```
-You may need to change the LOCK_PATH and LOG_FILE location to match the standard locations for your *nix installation.
-LOCK_PATH could be set to /var/lock, /var/lock/subsys, or even /tmp
-
-Create the log file with:
-```
-sudo touch /var/log/zfs-repl.log
+./target-config --host [[user@]target-name] > hosts/[target-name].conf
 ```
 
-You can also specify global default settings in zfs-repl.conf. 
+zfs-repl.conf
+-------------
+Global config file
 
 
-###[target-name].conf
+/hosts/[target-name].conf
+-------------------------
 *Note:* For the uninitiated, [target-host] should be replaced by the hostname of your target system. For example, if you specify --host repl@nas12 on the 'zfs-repl' command line then nas12 would be your hostname and the configuration file would be /etc/zfs-repl/nas12.conf
 
-The /etc/zfs-repl/[target-name].conf file holds configuration setting specific to the target host. The basic setup should be completed using the 'target-config' command as stated earlier.  It can also be used to set defaults for the specific host.  For example, if you always want to use mbuffer, gzip, and encryption when replicating to a specific host then add the following to [target-name].conf file.
-
-```
-PROTOCOL=MBUFFER
-COMPRESSION=GZIP
-ENCRYPT=true
-```
+The /etc/zfs-repl/[target-name].conf file holds configuration setting specific to the target host. The basic setup should be completed using the 'target-config' command as stated earlier.  It can also be used to set defaults for the specific host.  
 
 If you need to replicate to more then one host, make sure you run the 'target-config' command for each host and create the appropriate .conf file for each host.  For example:
 
@@ -136,20 +88,17 @@ Usage
 
 See 'zfs-repl --help'.
 
-*Example 1:*
-Source system hostX needs to backup the every changing file system pool0/data01 to the target system hostZ under tank1/backup/data01.  hostX wants to maintain a rolling two days of snapshots but hostZ needs to maintain seven days of snapshots.  Snapshots need to be taken and replicated every hour.  Further, hostZ needs to compress the backup file system using lz4.
+Example
+-------
+Source system hostX needs to backup the every changing file system pool0/data01 to the target system hostZ under tank1/backup/data01.  hostX wants to maintain a rolling two days of snapshots but hostZ needs to maintain seven days of snapshots.  Further, hostZ needs to compress the backup file system using lz4.
 
 On hostZ, at least zpool tank1 should already be created but tank1/backup/data01 should not.
 
-Initial replication from hostX as root
 ```
-/opt/zfs-repl/zfs-repl --host repl@hostZ --source pool0/data01 --dest tank1/backup/data01 --create-dest --dest-opt compression=lz4
+/opt/zfs-repl/zfs-repl --host repl@hostZ --source pool0/data01 --dest tank1/backup/data01 --snap-retain "-2 days" --dest-snap-retain "-7 days" --create-dest --dest-opt compression=lz4
 ```
 
-Hourly snapshot replication crontab entry
-```
-0 * * * *  /opt/zfs-repl/zfs-repl --host repl@hostZ --source pool0/data01 --dest tank1/backup/data01 --snap-retain "-2 days" --dest-snap-retain "-7 days"
-```
+The above command could be added to crontab with required schedule.
 
 Notes
 =====
