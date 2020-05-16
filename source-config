@@ -128,11 +128,11 @@ NOTIFY_ON_ERROR=true
 # you can use the vars $LOG_ERROR_FILE and $LOG_SUCCESS_FILE in the hook
 # examples:
 #
-# NOTIFY_SUCCESS_COMMAND="/usr/local/sbin/telegram-notify --title srv-02 --success --text \$LOG_SUCCESS_FILE"
-# NOTIFY_ERROR_COMMAND="/usr/local/sbin/telegram-notify --title srv-02 --error --text \$LOG_ERROR_FILE"
+# NOTIFY_SUCCESS_COMMAND="/usr/local/sbin/telegram-notify --title <hostname> --success --text \$LOG_SUCCESS_FILE"
+# NOTIFY_ERROR_COMMAND="/usr/local/sbin/telegram-notify --title <hostname> --error --text \$LOG_ERROR_FILE"
 #
-# NOTIFY_SUCCESS_COMMAND="cat \"$LOG_SUCCESS_FILE\" | sendmail -F pve-03@sig2k.com c.pradelli@sig2k.com"
-# NOTIFY_ERROR_COMMAND="cat \"${LOG_ERROR_FILE}\" | sendmail -F pve-03@sig2k.com c.pradelli@sig2k.com"
+# NOTIFY_SUCCESS_COMMAND="cat \"$LOG_SUCCESS_FILE\" | sendmail -F <from email> <to email>"
+# NOTIFY_ERROR_COMMAND="cat \"${LOG_ERROR_FILE}\" | sendmail -F <from email> <to email>"
 #
 NOTIFY_SUCCESS_COMMAND=""
 NOTIFY_ERROR_COMMAND=""
