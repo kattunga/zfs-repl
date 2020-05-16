@@ -456,9 +456,7 @@ log() {
 		if [ $QUIET = false ]; then
 			echo "$line"
 		fi
-		if [ -n "$LOG_FILE" ]; then
-			echo "$line" >> $LOG_FILE 2> /dev/null
-		fi
+		echo "$line" >> $LOG_FILE 2> /dev/null
 
 		# syslog
 		if [ $SYSLOG = true ]; then
