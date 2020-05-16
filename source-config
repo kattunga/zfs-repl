@@ -118,28 +118,26 @@ cat << EOF >> $CFG_FILE
 # settings in this file can be over ridden by command line options
 #
 
-# email to send reports, if "mail_to" is not defined mailx is not used, only NOTIFY_COMMAND and ERROR_COMMAND are executed
-mail_from=
-mail_to=
-mail_subject="zfs-replication log"
+# notify on success (true/false)
+NOTIFY_ON_SUCCESS=false
 
-# mailx options (check man mailx for see available options)
-# (e.g. mail_opts="-S smtp=<smtp> -S smtp-use-starttls -S ssl-verify=ignore -S smtp-auth=login -S smtp-auth-user=<user> -S smtp-auth-password=<password>")
-mail_opts=
+# notify on error (true/false)
+NOTIFY_ON_ERROR=false
 
-# email repliction log when an error occurs (true/false)
-ERR_MAIL=false
+# commands to execute on notification
+# you can use the vars $LOG_ERROR_FILE and $LOG_SUCCESS_FILE in the hook
+# examples:
+#
+# NOTIFY_SUCCESS_COMMAND="/usr/local/sbin/telegram-notify --title srv-02 --success --text \$LOG_SUCCESS_FILE"
+# NOTIFY_ERROR_COMMAND="/usr/local/sbin/telegram-notify --title srv-02 --error --text \$LOG_ERROR_FILE"
+#
+# NOTIFY_SUCCESS_COMMAND="cat \"$LOG_SUCCESS_FILE\" | sendmail -F pve-03@sig2k.com c.pradelli@sig2k.com"
+# NOTIFY_ERROR_COMMAND="cat \"${LOG_ERROR_FILE}\" | sendmail -F pve-03@sig2k.com c.pradelli@sig2k.com"
+#
+NOTIFY_SUCCESS_COMMAND=""
+NOTIFY_ERROR_COMMAND=""
 
-# always email replication log (true/false)
-SENDMAIL=false
-
-# commands to execute when sending mail, it can be used with or without mailx (if mailx is not available or mail_to is not defined)
-# you can use the vars $ERR_FILE and $EMAIL_LOG in the hook
-# example: "/usr/local/sbin/telegram-notify --text $ERR_FILE"
-NOTIFY_COMMAND=""
-ERROR_COMMAND=""
-
-#log to syslog (true/false)
+# log to syslog (true/false)
 SYSLOG=false
 
 #date format used in log file

@@ -59,6 +59,7 @@ nano zfs-repl.conf
 Optionally, if target host is a different platform/os version, you shoud create a custom target configuration file
 
 ```
+mkdir hosts
 ./target-config --host [[user@]target-name] > hosts/[target-name].conf
 ```
 

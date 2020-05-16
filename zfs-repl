@@ -158,17 +158,11 @@ CONFIG_SOURCE=$(basename $0)
 ##################### Do not touch anything below this line ###########################
 #######################################################################################
 
-# this settings are configured in zfs-repl.conf
-mail_from=
-mail_to=
-mail_subject=
-mail_opts=
+NOTIFY_ON_ERROR=false
+NOTIFY_ON_SUCCESS=false
 
-ERR_MAIL=false
-SENDMAIL=false
-
-NOTIFY_COMMAND=
-ERROR_COMMAND=
+NOTIFY_SUCCESS_COMMAND=
+NOTIFY_ERROR_COMMAND=
 
 SYSLOG=false
 DATE_FORMAT="+%Y-%m-%d %H:%M:%S"
@@ -192,7 +186,6 @@ ZFS=
 LOGGER=
 MBUFFER=
 DATE=
-MAILX=
 SHUF=
 
 #target host bins
@@ -234,15 +227,15 @@ LOCK_PATH=/var/lock
 
 TMP_PATH=/tmp/$(basename $0 .sh).$$
 RSYNC_LOG=$TMP_PATH/rsync.stats
-EMAIL_MSG_OK=$TMP_PATH/emailok
-ERR_FILE=$TMP_PATH/error
-EMAIL_LOG=$TMP_PATH/emaillog
 DSNAP_LIST=$TMP_PATH/snaplist-target.lst
 SNAP_LIST=$TMP_PATH/snaplist.lst
 
+LOG_SUCCESS_FILE=$TMP_PATH/log_ok
+LOG_ERROR_FILE=$TMP_PATH/log_error
+
 # values: none, init, finished
 REPL_STATUS=none
-SENT_MAIL=false
+NOTIFICATION_SENT=false
 
 declare -a on_exit_items
 ####################################Function###########################################
@@ -370,9 +363,6 @@ check_cmd() {
 launch_check() {
 	local option
 
-	if [[ ($SENDMAIL == true || $ERR_MAIL == true) && "$mail_to" != "" ]]; then
-		check_cmd "source" "MAILX" "mailx" "-m|--email-errors|-M|--email"
-	fi
 	if [[ "$MAX_TIME" != "" || "$RMT_MAX_TIME" != "" ]]; then
 		check_cmd "source" "DATE" "GNU date" "-t|--snap-retain|-T|--dest-snap-retain"
 	fi
@@ -418,9 +408,8 @@ replication_status() {
 			none|finished)
 				;;
 			init)
-				echo "ERROR: zfs replication failed." >> $ERR_FILE
-				echo "zfs receive thread may have failed to start." >> $ERR_FILE
-				cat $ERR_FILE >> $EMAIL_LOG
+				echo "ERROR: zfs replication failed." >> $LOG_ERROR_FILE
+				echo "zfs receive thread may have failed to start." >> $LOG_ERROR_FILE
 				;;
 		esac
 	fi
@@ -430,8 +419,8 @@ replication_status() {
 # Function check if error was logged
 #
 check_for_error() {
-	if [ -s "$ERR_FILE" ]; then
-		log "$(cat $ERR_FILE)"
+	if [ -s "$LOG_ERROR_FILE" ]; then
+		log "$(cat $LOG_ERROR_FILE)"
 		send_email_log
 		exit 1
 	fi
@@ -442,7 +431,7 @@ check_for_error() {
 # Function log error
 #
 log_error() {
-	echo "$1" > $ERR_FILE
+	echo "$1" > $LOG_ERROR_FILE
 	check_for_error
 }
 
@@ -461,6 +450,8 @@ log() {
 	fi
 	# don't output blank lines
 	if [ -n "$1" ] && [ "$1" != "-> " ]; then
+
+		# logfile
 		date_line=$($DATE "$DATE_FORMAT")
 		line="$date_line $1"
 		if [ $QUIET = false ]; then
@@ -469,11 +460,10 @@ log() {
 		if [ -n "$LOG_FILE" ]; then
 			echo "$line" >> $LOG_FILE 2> /dev/null
 		fi
-		if [[ ( $SENDMAIL == true || $ERR_MAIL == true ) && -n $EMAIL_LOG ]]; then
-			echo "$line" >> $EMAIL_LOG 2> /dev/null
-		fi
-		line="$1"
+
+		# syslog
 		if [ $SYSLOG = true ]; then
+			line="$1"
 			#fix lines beginning w/ '->' as logger reads as cl option
 			if [ "->" == "${line:0:2}" ]; then
 				line="${line:2}"
@@ -488,29 +478,24 @@ log() {
 # Function email log file
 #
 send_email_log() {
-	if [ $SENT_MAIL = false ]; then
-		if [[ ( $SENDMAIL == true || ( $ERR_MAIL == true && -s $ERR_FILE ) ) && -n $EMAIL_LOG && -s $EMAIL_LOG ]]; then
+	if [ $NOTIFICATION_SENT = false ]; then
+		if [[ ( $NOTIFY_ON_SUCCESS == true || ( $NOTIFY_ON_ERROR == true && -s $LOG_ERROR_FILE ) ) ]]; then
 
-			if [[ "$mail_to" != "" ]]; then
-				$MAILX $mail_opts -r "$mail_from" -s "$mail_subject" $mail_to < $EMAIL_LOG
-				[ $DEBUG = true ] && echo "DEBUG: Sent email to $mail_to."
-			fi
+			# notification on error
+			if [[ $NOTIFY_ON_ERROR == true && "$NOTIFY_ERROR_COMMAND" != "" && -s $LOG_ERROR_FILE ]]; then
+				eval $NOTIFY_ERROR_COMMAND > /dev/null
+				[ $DEBUG = true ] && log "DEBUG: notification command executed $NOTIFY_ERROR_COMMAND"
 
-			# error command
-			if [[ $ERR_MAIL == true && "$ERROR_COMMAND" != "" && -s $ERR_FILE ]]; then
-				eval $ERROR_COMMAND > /dev/null
-				[ $DEBUG = true ] && log "DEBUG: notification command executed $ERROR_COMMAND"
-
-			# notification command
+			# notification on success
 			else
-				if [[ $SENDMAIL == true && "$NOTIFY_COMMAND" != "" ]]; then
-					eval $NOTIFY_COMMAND > /dev/null
-					[ $DEBUG = true ] && log "DEBUG: notification command executed $NOTIFY_COMMAND"
+				if [[ $NOTIFY_ON_SUCCESS == true && "$NOTIFY_SUCCESS_COMMAND" != "" ]]; then
+					eval $NOTIFY_SUCCESS_COMMAND > /dev/null
+					[ $DEBUG = true ] && log "DEBUG: notification command executed $NOTIFY_SUCCESS_COMMAND"
 				fi
 			fi
 
 			# send email only once
-			SENT_MAIL=true
+			NOTIFICATION_SENT=true
 		fi
 	fi
 }
@@ -522,7 +507,7 @@ send_email_log() {
 create_fs_snap() {
 	SnapName="$SNAP_PREF$($DATE +%Y%m%d%H%M%S)"
 	log "-> $SRC_PATH@$SnapName Snapshot creation."
-	output=$( $ZFS snapshot $RECURSIVE_SNAP $SRC_PATH\@$SnapName 2> $ERR_FILE )
+	output=$( $ZFS snapshot $RECURSIVE_SNAP $SRC_PATH\@$SnapName 2> $LOG_ERROR_FILE )
 	log "-> $output"
 	check_for_error
 }
@@ -533,13 +518,13 @@ create_fs_snap() {
 # variable target_fs_name.
 #
 target_fs_exists() {
-	target_fs_name=$(ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -o name -H $TGT_PATH 2> $ERR_FILE | tail -1 )
-	if [ -s "$ERR_FILE" ]; 	then
-		path_error=$(grep "$TGT_PATH" $ERR_FILE)
+	target_fs_name=$(ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -o name -H $TGT_PATH 2> $LOG_ERROR_FILE | tail -1 )
+	if [ -s "$LOG_ERROR_FILE" ]; 	then
+		path_error=$(grep "$TGT_PATH" $LOG_ERROR_FILE)
 		if [ "$path_error" == "" ]; 		then
 			check_for_error
 		else
-			rm $ERR_FILE
+			rm $LOG_ERROR_FILE
 			log "-> $TGT_PATH file system does not exist on target host $TGT_HOST."
 		fi
 	fi
@@ -551,7 +536,7 @@ target_fs_exists() {
 # both the source and destination hosts.
 #
 check_last_source_snap() {
-	last_snap_source=$( $ZFS list -o name -t snapshot -H 2> $ERR_FILE | grep $SRC_PATH\@ | tail -1 )
+	last_snap_source=$( $ZFS list -o name -t snapshot -H 2> $LOG_ERROR_FILE | grep $SRC_PATH\@ | tail -1 )
 	check_for_error
 	if [ "$last_snap_source" == "" ]
 	then
@@ -565,7 +550,7 @@ check_last_source_snap() {
 # both the source and destination hosts.
 #
 check_last_target_snap() {
-	last_snap_target=$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -H -o name -r -t snapshot 2> $ERR_FILE | grep $TGT_PATH\@ | tail -1 )
+	last_snap_target=$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -H -o name -r -t snapshot 2> $LOG_ERROR_FILE | grep $TGT_PATH\@ | tail -1 )
 	check_for_error
 	if [ "$last_snap_target" == "" ]
 	then
@@ -589,12 +574,12 @@ replicate_fs() {
 			# create and replicate source to target
 			log "-> $last_snap_source Initial replication."
 			[ $DEBUG = true ] && log "DEBUG: ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS create $ZFS_CREATE_OPTS -p $TGT_PATH"
-			log "-> $( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS create $ZFS_CREATE_OPTS -p $TGT_PATH 2> $ERR_FILE )"
+			log "-> $( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS create $ZFS_CREATE_OPTS -p $TGT_PATH 2> $LOG_ERROR_FILE )"
 			check_for_error
 			
 			if [ $MOUNT = false ]; then
 			    [ $DEBUG = true ] && log "DEBUG: ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS set mountpoint=none $TGT_PATH"
-			    log "-> $( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS set mountpoint=none $TGT_PATH 2> $ERR_FILE )"
+			    log "-> $( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS set mountpoint=none $TGT_PATH 2> $LOG_ERROR_FILE )"
 			    check_for_error
 			fi
 
@@ -628,7 +613,7 @@ replicate_fs() {
 			if [ $DEBUG = true ]; then
 				log "DEBUG: $SRC_PIPELINE_CMDS"
 			fi
-			log "-> $( eval $SRC_PIPELINE_CMDS 2> $ERR_FILE )"
+			log "-> $( eval $SRC_PIPELINE_CMDS 2> $LOG_ERROR_FILE )"
 			;;
 			
 		SSHMBUFFER)
@@ -637,7 +622,7 @@ replicate_fs() {
 			if [ $DEBUG = true ]; then
 				log "DEBUG: $SRC_PIPELINE_CMDS"
 			fi
-			log "-> $( eval $SRC_PIPELINE_CMDS 2> $ERR_FILE )"
+			log "-> $( eval $SRC_PIPELINE_CMDS 2> $LOG_ERROR_FILE )"
 			;;
 
 		MBUFFER)
@@ -650,18 +635,18 @@ replicate_fs() {
 			fi
 			# start 'zfs send' pipeline
 			#  The timing of when to start sender differs between systems and the current load on the receiver.  This trick keeps everyone in sync.
-			#  The pipeline waits until 'zfs receive' pipeline is ready with '---' in $ERR_FILE
+			#  The pipeline waits until 'zfs receive' pipeline is ready with '---' in $LOG_ERROR_FILE
 		
 			replication_status init
-			(c=0;t=0; while [ $c -eq 0 ]; do sleep 1; [ -s $ERR_FILE ] && c=$(grep -c ^---$ $ERR_FILE); t=$(( t + 1 )); if [ $t -gt $MBUFFER_INIT_TIMEOUT ]; then kill 0; exit 1; fi; done; eval $SRC_PIPELINE_CMDS 2>> $ERR_FILE ) &
+			(c=0;t=0; while [ $c -eq 0 ]; do sleep 1; [ -s $LOG_ERROR_FILE ] && c=$(grep -c ^---$ $LOG_ERROR_FILE); t=$(( t + 1 )); if [ $t -gt $MBUFFER_INIT_TIMEOUT ]; then kill 0; exit 1; fi; done; eval $SRC_PIPELINE_CMDS 2>> $LOG_ERROR_FILE ) &
 
 			# start 'zfs receive' pipeline
-			#  pipeline echos '---' to stderr (i.e. $ERR_FILE) to indicate ready to start
-			log "-> $(ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT "echo '---' 1>&2; eval $DST_PIPELINE_CMDS" 2>> $ERR_FILE)"
+			#  pipeline echos '---' to stderr (i.e. $LOG_ERROR_FILE) to indicate ready to start
+			log "-> $(ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT "echo '---' 1>&2; eval $DST_PIPELINE_CMDS" 2>> $LOG_ERROR_FILE)"
 			replication_status finished
 			
-			# remove start indicator (i.e. "---") for $ERR_FILE
-			sed -i '/^---$/d' $ERR_FILE
+			# remove start indicator (i.e. "---") for $LOG_ERROR_FILE
+			sed -i '/^---$/d' $LOG_ERROR_FILE
 			;;
 	esac
 
@@ -771,7 +756,7 @@ clone_source_last_snap() {
 	if [ $DEBUG = true ]; then
 		log "DEBUG: Checking last remote snapshot for clone"
 	fi
-	last_snap_source=$( $ZFS list -H -o name -r -t snapshot 2> $ERR_FILE | grep $SRC_PATH\@${SNAP_PREF} | tail -1 )
+	last_snap_source=$( $ZFS list -H -o name -r -t snapshot 2> $LOG_ERROR_FILE | grep $SRC_PATH\@${SNAP_PREF} | tail -1 )
 	check_for_error
 
 	if [ "$last_snap_source" == "" ]; then
@@ -781,7 +766,7 @@ clone_source_last_snap() {
 		if [ $DEBUG = true ]; then
 			log "DEBUG: Checking if clone already exists"
 		fi
-		clone_exists=$( $ZFS list -H -o name -r 2> $ERR_FILE | grep $SRC_CLONE | tail -1 )
+		clone_exists=$( $ZFS list -H -o name -r 2> $LOG_ERROR_FILE | grep $SRC_CLONE | tail -1 )
 		check_for_error
 
 		# if exists, check if it is a clone and destroy it, else raise error
@@ -789,14 +774,14 @@ clone_source_last_snap() {
 			if [ $DEBUG = true ]; then
 				log "DEBUG: Clone already exist, verifying it is a clone"
 			fi
-			clone_source=$( $ZFS get -H -o value origin $SRC_CLONE 2> $ERR_FILE )
+			clone_source=$( $ZFS get -H -o value origin $SRC_CLONE 2> $LOG_ERROR_FILE )
 			check_for_error
 
 			if [ "$clone_source" == "-" ]; then
 				log_error "A source filesystem exist with same name as required clone"
 			else
 				log "-> Destroying existing clone"
-				$ZFS destroy $SRC_CLONE 2> $ERR_FILE
+				$ZFS destroy $SRC_CLONE 2> $LOG_ERROR_FILE
 				check_for_error
 				clone_exists=""
 			fi
@@ -805,7 +790,7 @@ clone_source_last_snap() {
 		# if not exists, clone now
 		if [ "$clone_exists" != "$SRC_CLONE" ]; then
 			log "-> Creating source clone $SRC_CLONE $SRC_CLONE_OPTS"
-			$ZFS clone $last_snap_source $SRC_CLONE $SRC_CLONE_OPTS 2> $ERR_FILE
+			$ZFS clone $last_snap_source $SRC_CLONE $SRC_CLONE_OPTS 2> $LOG_ERROR_FILE
 			check_for_error
 		fi
 	fi
@@ -822,7 +807,7 @@ clone_remote_last_snap() {
 	if [ $DEBUG = true ]; then
 		log "DEBUG: Checking last remote snapshot for clone"
 	fi
-	last_snap_target=$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -H -o name -r -t snapshot 2> $ERR_FILE | grep $TGT_PATH\@${SNAP_PREF} | tail -1 )
+	last_snap_target=$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -H -o name -r -t snapshot 2> $LOG_ERROR_FILE | grep $TGT_PATH\@${SNAP_PREF} | tail -1 )
 	check_for_error
 
 	if [ "$last_snap_target" == "" ]; then
@@ -832,7 +817,7 @@ clone_remote_last_snap() {
 		if [ $DEBUG = true ]; then
 			log "DEBUG: Checking if clone already exists"
 		fi
-		clone_exists=$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -H -o name -r 2> $ERR_FILE | grep $TGT_CLONE | tail -1 )
+		clone_exists=$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -H -o name -r 2> $LOG_ERROR_FILE | grep $TGT_CLONE | tail -1 )
 		check_for_error
 
 		# if exists, check if it is a clone and destroy it, else raise error
@@ -840,14 +825,14 @@ clone_remote_last_snap() {
 			if [ $DEBUG = true ]; then
 				log "DEBUG: Clone already exist, verifying it is a clone"
 			fi
-			clone_source=$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS get -H -o value origin $TGT_CLONE 2> $ERR_FILE )
+			clone_source=$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS get -H -o value origin $TGT_CLONE 2> $LOG_ERROR_FILE )
 			check_for_error
 
 			if [ "$clone_source" == "-" ]; then
 				log_error "A target filesystem exist with same name as required clone"
 			else
 				log "-> Destroying existing clone"
-				ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS destroy $TGT_CLONE 2> $ERR_FILE
+				ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS destroy $TGT_CLONE 2> $LOG_ERROR_FILE
 				check_for_error
 				clone_exists=""
 			fi
@@ -856,7 +841,7 @@ clone_remote_last_snap() {
 		# if not exists, clone now
 		if [ "$clone_exists" != "$TGT_CLONE" ]; then
 			log "-> Creating target clone $TGT_CLONE $TGT_CLONE_OPTS"
-			ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS clone $last_snap_target $TGT_CLONE $TGT_CLONE_OPTS 2> $ERR_FILE
+			ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS clone $last_snap_target $TGT_CLONE $TGT_CLONE_OPTS 2> $LOG_ERROR_FILE
 			check_for_error
 		fi
 	fi
@@ -1060,14 +1045,14 @@ while [ $# -gt 0 ];do
             REPLICATE=false
             ;;
          -m|--email-errors)
-            ERR_MAIL=true
+            NOTIFY_ON_ERROR=true
             ;;
          -M|--email)
-            SENDMAIL=true
+            NOTIFY_ON_SUCCESS=true
             ;;
          --no-email)
-            ERR_MAIL=false
-            SENDMAIL=false
+            NOTIFY_ON_ERROR=false
+            NOTIFY_ON_SUCCESS=false
             ;;
          -z|--create-dest)
             CREATEFS=true
@@ -1113,11 +1098,11 @@ LOCK_FILE=$LOCK_PATH/$(basename $0 .sh)-${src_path_hash}
 mkdir -p $TMP_PATH > /dev/null 2>&1
 [ $DEBUG = true ] && log "TMP_PATH = $TMP_PATH"
 
-# save target name as first line of email log
+# save target name as first line of log
 log "Target host: $TGT_HOST"
 
 # file for simple ok message
-echo "Replication of $SRC_PATH to $TGT_HOST ok" > $EMAIL_MSG_OK
+echo "Replication of $SRC_PATH to $TGT_HOST ok" > $LOG_SUCCESS_FILE
 
 #register exit/clean up tasks
 on_exit_run replication_status
@@ -1193,43 +1178,43 @@ if [ $REPLICATE == true ]; then
 	else
 		# Clean up any snapshots in target that is not in source
 		if [ $CLEAN == true ]; then
-			clean_remote_snaps 2> $ERR_FILE
+			clean_remote_snaps 2> $LOG_ERROR_FILE
 			check_for_error
 		fi
 
 		# Initiate a dif replication.
-		replicate_fs repl 2> $ERR_FILE
+		replicate_fs repl 2> $LOG_ERROR_FILE
 		check_for_error
 
 		# Clean up any snapshots in target that is not in source
 		if [ $CLEAN_AFTER == true ]; then
-			clean_remote_snaps 2> $ERR_FILE
+			clean_remote_snaps 2> $LOG_ERROR_FILE
 			check_for_error
 		fi
 		
 		# Clean up any snapshots that are old.
 		if [ "$MAX_TIME" != "" ]; then
-			clean_old_snaps 2> $ERR_FILE
+			clean_old_snaps 2> $LOG_ERROR_FILE
 			check_for_error
 		fi
 
 		# clone last target snapshot
 		if [ "$TGT_CLONE" != "" ]; then
-			clone_remote_last_snap 2> $ERR_FILE
+			clone_remote_last_snap 2> $LOG_ERROR_FILE
 			check_for_error
 		fi
 	fi
 else
 	# Clean up any snapshots that are old.
 	if [ -n "$MAX_TIME" ]; then
-		clean_old_snaps 2> $ERR_FILE
+		clean_old_snaps 2> $LOG_ERROR_FILE
 		check_for_error
 	fi
 fi
 
 # clone last source snapshot
 if [ "$SRC_CLONE" != "" ]; then
-	clone_source_last_snap 2> $ERR_FILE
+	clone_source_last_snap 2> $LOG_ERROR_FILE
 	check_for_error
 fi
 
