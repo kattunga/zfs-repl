@@ -532,7 +532,7 @@ target_fs_exists() {
 # both the source and destination hosts.
 #
 check_last_source_snap() {
-	last_snap_source=$( $ZFS list -o name -t snapshot -H 2> $LOG_ERROR_FILE | grep $SRC_PATH\@ | tail -1 )
+	last_snap_source=$( $ZFS list -o name -t snapshot -H 2> $LOG_ERROR_FILE | grep $SRC_PATH\@$SNAP_PREF | tail -1 )
 	check_for_error
 	if [ "$last_snap_source" == "" ]
 	then
