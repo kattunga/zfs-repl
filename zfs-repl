@@ -599,6 +599,8 @@ replicate_fs() {
 
 				ZFS_SEND="$ZFS send $ZFS_SEND_COMPRESS $RECURSIVE_REPL -I  $last_snap_target $last_snap_source"
 				ZFS_RECV="$RMT_ZFS recv $VERBOSE $FORCE_RECV $TGT_PATH"
+			else
+				return
 			fi
 			;;
 	esac
