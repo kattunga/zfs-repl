@@ -170,7 +170,7 @@ DATE_FORMAT="+%Y-%m-%d %H:%M:%S"
 PROTOCOL=SSH
 
 SSH_OPTS=
-SSH_COMPRESSION=false
+COMPRESSION=true
 
 MBUFFER_OPTS="-s 128k -m 256M -q"
 RMT_MBUFFER_OPTS="-s 128k -m 256M -q"
@@ -307,10 +307,9 @@ usage() {
 	echo "  -z --create-dest        create target file system/dataset if not exists"
 	echo "     --mount-dest         leave mountpoint untouched in target"
 	echo "  -o --protocol           replication transport protocol"
-	echo "      SSH                 Secure and can compress. Recomended for low latency and stable wan"
-	echo "      SSHMBUFFER          Secure, can compress and has buffering. Recommended for high latency wan"
-	echo "      MBUFFER             Insecure, do not compress. Require a TCP port for replication. Recommended for lan or already compressed vpn"
-	echo "  -C --compression        enable compression on SSH protocol replication"
+	echo "      SSH                 Secure. Recomended for low latency and stable wan"
+	echo "      SSHMBUFFER          Secure, has buffering. Recommended for high latency wan"
+	echo "      MBUFFER             Insecure. Require a TCP port for replication. Recommended for private lan or vpn"
 	echo "  -P --mbuffer-port       replication port for MBUFFER protocol. (default: auto)"
 	echo "  -q --quiet              quiet. suppress output to stdout. usefull for cron jobs"
 	echo "     --notify-errors      execute notification command on errors"
@@ -566,6 +565,11 @@ replicate_fs() {
 	
 	check_last_source_snap 
 
+	# enable SSH compression
+	if [ $COMPRESSION = true ]; then
+	  ZFS_SEND_COMPRESS="-c -L"
+	fi
+
 	case $action in 
 		init)
 			# create and replicate source to target
@@ -580,7 +584,7 @@ replicate_fs() {
 			    check_for_error
 			fi
 
-			ZFS_SEND="$ZFS send $RECURSIVE_REPL $last_snap_source"
+			ZFS_SEND="$ZFS send $ZFS_SEND_COMPRESS $RECURSIVE_REPL $last_snap_source"
 			ZFS_RECV="$RMT_ZFS recv $VERBOSE -F $TGT_PATH"
 			;;		
 		repl)
@@ -592,20 +596,15 @@ replicate_fs() {
 
 			log "-> $last_snap_target $last_snap_source Incremental send."
 
-			ZFS_SEND="$ZFS send $RECURSIVE_REPL -I  $last_snap_target $last_snap_source"
+			ZFS_SEND="$ZFS send $ZFS_SEND_COMPRESS $RECURSIVE_REPL -I  $last_snap_target $last_snap_source"
 			ZFS_RECV="$RMT_ZFS recv $VERBOSE $FORCE_RECV $TGT_PATH"
 			;;
 	esac
 
-	# enable SSH compression
-	if [ $SSH_COMPRESSION = true ]; then
-	  SSH_GZIP=-C
-	fi
-
 	case "$PROTOCOL" in
 		# using ssh (for remote networks)
 		SSH)
-			SRC_PIPELINE_CMDS="$ZFS_SEND | ssh $SSH_GZIP $SSH_OPTS $SSH_TGT_HOST $SSH_TGT_PORT \"$ZFS_RECV\""
+			SRC_PIPELINE_CMDS="$ZFS_SEND | ssh $SSH_OPTS $SSH_TGT_HOST $SSH_TGT_PORT \"$ZFS_RECV\""
 
 			if [ $DEBUG = true ]; then
 				log "DEBUG: $SRC_PIPELINE_CMDS"
@@ -614,7 +613,7 @@ replicate_fs() {
 			;;
 			
 		SSHMBUFFER)
-			SRC_PIPELINE_CMDS="$ZFS_SEND | $MBUFFER $MBUFFER_OPTS | ssh $SSH_GZIP $SSH_OPTS $SSH_TGT_HOST $SSH_TGT_PORT \"$RMT_MBUFFER $RMT_MBUFFER_OPTS | $ZFS_RECV\""
+			SRC_PIPELINE_CMDS="$ZFS_SEND | $MBUFFER $MBUFFER_OPTS | ssh $SSH_OPTS $SSH_TGT_HOST $SSH_TGT_PORT \"$RMT_MBUFFER $RMT_MBUFFER_OPTS | $ZFS_RECV\""
 
 			if [ $DEBUG = true ]; then
 				log "DEBUG: $SRC_PIPELINE_CMDS"
@@ -969,9 +968,6 @@ while [ $# -gt 0 ];do
          	 		;;
  	 		 esac
              ;;
-         -C|--compression)
-             SSH_COMPRESSION=true
-         	 ;;
          -P|--mbuffer-port)
              shift
              if [[ $1 =~ ^[0-9]+$ || $1 == "auto" ]]; then

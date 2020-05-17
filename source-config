@@ -151,8 +151,8 @@ PROTOCOL=SSH
 # custom ssh options
 SSH_OPTS=
 
-# set to true to enable ssh compression
-SSH_COMPRESSION=false
+# use compression for send/receive
+COMPRESSION=true
 
 # mbuffer local and remote options for SSHMBUFFER and MBUFFER protocols
 # see 'man mbuffer' for options
