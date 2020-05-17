@@ -594,10 +594,12 @@ replicate_fs() {
 			let stringpos=$(expr index "$last_snap_target" @)
 			last_snap_target=$SRC_PATH@${last_snap_target:$stringpos}
 
-			log "-> $last_snap_target $last_snap_source Incremental send."
+			if [ "$last_snap_target" != "$last_snap_source" ]; then
+				log "-> $last_snap_target $last_snap_source Incremental send."
 
-			ZFS_SEND="$ZFS send $ZFS_SEND_COMPRESS $RECURSIVE_REPL -I  $last_snap_target $last_snap_source"
-			ZFS_RECV="$RMT_ZFS recv $VERBOSE $FORCE_RECV $TGT_PATH"
+				ZFS_SEND="$ZFS send $ZFS_SEND_COMPRESS $RECURSIVE_REPL -I  $last_snap_target $last_snap_source"
+				ZFS_RECV="$RMT_ZFS recv $VERBOSE $FORCE_RECV $TGT_PATH"
+			fi
 			;;
 	esac
 
