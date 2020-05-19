@@ -1105,7 +1105,6 @@ echo "Replication of $SRC_PATH to $TGT_HOST ok" > $LOG_SUCCESS_FILE
 
 #register exit/clean up tasks
 on_exit_run replication_status
-on_exit_run	log "End ------------------------------------------------------------"
 on_exit_run execute_notification
 [ $DEBUG = false ] && on_exit_run rm -rf $TMP_PATH
 
@@ -1153,9 +1152,11 @@ if [ $? -gt 0 ]; then
 fi
 echo $$ > $LOCK_FILE
 
-#register exit/clean up tasks
+# register exit/clean up tasks
 on_exit_run rm -f $LOCK_FILE
 
+# final message
+on_exit_run	log "end-------------------------------------------------------------"
 
 #Create a new snapshot of the path spec.
 if [ $SNAPSHOT == true ]; then
