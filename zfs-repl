@@ -461,7 +461,7 @@ log() {
 		# to console
 		if [ $QUIET == false ]; then
 			if [ "$2" == "2" ]; then
-				>&2 echo "$line"
+				echo "$line" >&2 
 			else
 				echo "$line"
 			fi
@@ -488,7 +488,7 @@ log() {
 #
 check_for_error() {
 	if [ -s "$LOG_ERROR_FILE" ]; then
-		log "$(cat $LOG_ERROR_FILE)" "2"
+		log "ERROR: $(cat $LOG_ERROR_FILE)" "2"
 		execute_notification
 		exit 1
 	fi
