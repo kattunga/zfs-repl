@@ -509,7 +509,7 @@ log_error() {
 #
 create_fs_snap() {
 	SnapName="$SNAP_PREF$($DATE +%Y%m%d%H%M%S)"
-	log "$SRC_PATH@$SnapName Snapshot creation."
+	log "$SRC_PATH@$SnapName snapshot creation."
 	output=$( $ZFS snapshot $RECURSIVE_SNAP $SRC_PATH\@$SnapName 2> $LOG_ERROR_FILE )
 	log "$output"
 	check_for_error
@@ -521,6 +521,7 @@ create_fs_snap() {
 # variable target_fs_name.
 #
 target_fs_exists() {
+	[ $DEBUG = true ] && log "check if target file exists"
 	[ $DEBUG = true ] && log "DEBUG: ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -o name -H $TGT_PATH 2> $LOG_ERROR_FILE | tail -1"
 	target_fs_name=$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -o name -H $TGT_PATH 2> $LOG_ERROR_FILE | tail -1 )
 	if [ -s "$LOG_ERROR_FILE" ]; 	
@@ -542,6 +543,7 @@ target_fs_exists() {
 # both the source and destination hosts.
 #
 check_last_source_snap() {
+	[ $DEBUG = true ] && log "find last source snapshot"
 	[ $DEBUG = true ] && log "DEBUG: $ZFS list -o name -t snapshot -H 2> $LOG_ERROR_FILE | grep $SRC_PATH\@$SNAP_PREF | tail -1"
 	last_snap_source=$( $ZFS list -o name -t snapshot -H 2> $LOG_ERROR_FILE | grep $SRC_PATH\@$SNAP_PREF | tail -1 )
 	check_for_error
@@ -557,6 +559,7 @@ check_last_source_snap() {
 # both the source and destination hosts.
 #
 check_last_target_snap() {
+	[ $DEBUG = true ] && log "find last target snapshot"
 	[ $DEBUG = true ] && log "DEBUG: ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -H -o name -r -t snapshot 2> $LOG_ERROR_FILE | grep $TGT_PATH\@ | tail -1"
 	last_snap_target=$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -H -o name -r -t snapshot 2> $LOG_ERROR_FILE | grep $TGT_PATH\@ | tail -1 )
 	check_for_error
@@ -571,6 +574,9 @@ check_last_target_snap() {
 # Function replicate filesystem
 #
 replicate_fs() {
+
+	[ $DEBUG = true ] && log "replicate fs $#"
+
 	[ $# -eq 0 ] && return 1
 	local action
 	action=$1
