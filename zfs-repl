@@ -1098,7 +1098,7 @@ mkdir -p $TMP_PATH > /dev/null 2>&1
 [ $DEBUG = true ] && log "TMP_PATH = $TMP_PATH"
 
 # save target name as first line of log
-log "Target host: $TGT_HOST"
+log "Target host: $TGT_HOST source: $SRC_PATH"
 
 # file for simple ok message
 echo "Replication of $SRC_PATH to $TGT_HOST ok" > $LOG_SUCCESS_FILE
