@@ -575,17 +575,15 @@ check_last_target_snap() {
 #
 replicate_fs() {
 
-	[ $DEBUG = true ] && log "replicate fs $#"
-
-	[ $# -eq 0 ] && return 1
-	local action
-	action=$1
+	local action=$1
 	
+	[ $DEBUG = true ] && log "replicate fs action: $action"
+
 	check_last_source_snap 
 
 	# enable SSH compression
 	if [ $COMPRESSION = true ]; then
-	  ZFS_SEND_COMPRESS="-c -L"
+		ZFS_SEND_COMPRESS="-c -L"
 	fi
 
 	case $action in 
@@ -624,6 +622,9 @@ replicate_fs() {
 				log "replication up to date."
 				return
 			fi
+			;;
+		*)
+			log_error "unknown action $action"
 			;;
 	esac
 
