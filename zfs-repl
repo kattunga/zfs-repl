@@ -462,7 +462,7 @@ log() {
 
 			if [ "$2" == "2" ]; then
 				echo "$date_line $1" >&2 
-				echo "$date_line \e[31m$1\e[0m"
+				echo -e "$date_line \e[31m$1\e[0m"
 			else
 				echo "$date_line $1"
 			fi
