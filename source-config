@@ -125,7 +125,7 @@ NOTIFY_ON_SUCCESS=false
 NOTIFY_ON_ERROR=true
 
 # commands to execute on notification
-# you can use the vars $LOG_ERROR_FILE, $LOG_SUCCESS_FILE and $LOG_FILE in the hook
+# you can use the vars \$LOG_ERROR_FILE, \$LOG_SUCCESS_FILE and \$LOG_FILE in the hook
 # you can find this files in /tmp/zfs_rpl.xxxx
 # examples:
 #
@@ -143,7 +143,7 @@ SYSLOG=true
 
 #date format used in log file
 # see 'man date' or 'info date' for options
-DATE_FORMAT="+%Y-%m-%d %H:%M:%S"
+LOG_DATE_FORMAT="+%Y-%m-%d %H:%M:%S"
 
 # default transport protocol (see 'zfs-repl --help' for valid options)
 PROTOCOL=SSH

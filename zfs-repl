@@ -165,7 +165,7 @@ NOTIFY_SUCCESS_COMMAND=
 NOTIFY_ERROR_COMMAND=
 
 SYSLOG=false
-DATE_FORMAT="+%Y-%m-%d %H:%M:%S"
+LOG_DATE_FORMAT="+%Y-%m-%d %H:%M:%S"
 
 PROTOCOL=SSH
 
@@ -224,7 +224,6 @@ FORCE_RECV=
 LOCK_PATH=/var/lock
 
 TMP_PATH=/tmp/$(basename $0 .sh).$$
-RSYNC_LOG=$TMP_PATH/rsync.stats
 DSNAP_LIST=$TMP_PATH/snaplist-target.lst
 SNAP_LIST=$TMP_PATH/snaplist.lst
 
@@ -412,6 +411,73 @@ replication_status() {
 		esac
 	fi
 }
+
+#######################################################################################
+#
+# Function execute notification commands file
+#
+execute_notification() {
+	if [ $NOTIFICATION_SENT = false ]; then
+
+		# notification on error
+		if [[ $NOTIFY_ON_ERROR == true && "$NOTIFY_ERROR_COMMAND" != "" && -s $LOG_ERROR_FILE ]]; then
+			eval $NOTIFY_ERROR_COMMAND > /dev/null
+			[ $DEBUG = true ] && log "DEBUG: notification command executed $NOTIFY_ERROR_COMMAND"
+
+		# notification on success
+		else
+			if [[ $NOTIFY_ON_SUCCESS == true && "$NOTIFY_SUCCESS_COMMAND" != "" ]]; then
+				eval $NOTIFY_SUCCESS_COMMAND > /dev/null
+				[ $DEBUG = true ] && log "DEBUG: notification command executed $NOTIFY_SUCCESS_COMMAND"
+			fi
+		fi
+
+		# execute notification only once
+		NOTIFICATION_SENT=true
+	fi
+}
+
+#######################################################################################
+#
+# Function log to std out and log file(s)
+#
+log() {
+
+	# if log has new lines, log each line separately
+	if [[ $1 == *$'\n'* ]]; then
+		local IFS=$'~'
+		for l in ${1//$'\n'/'~   '}; do
+			log "$l"
+		done
+		return
+	fi
+
+	# don't output blank lines
+	if [ -n "$1" ] && [ "$1" != "-> " ]; then
+
+		date_line=$($DATE "$LOG_DATE_FORMAT")
+		line="$date_line $1"
+
+		# to console
+		if [ $QUIET == false ]; then
+			echo "$line"
+		fi
+
+		# to logfile
+		echo "$line" >> $LOG_FILE 2> /dev/null
+
+		# to syslog
+		if [ $SYSLOG == true ]; then
+			line="$1"
+			#fix lines beginning w/ '->' as logger reads as cl option
+			if [ "->" == "${line:0:2}" ]; then
+				line="${line:2}"
+			fi
+			$LOGGER -t $(basename $0) "$line"
+		fi
+	fi
+}
+
 #######################################################################################
 #
 # Function check if error was logged
@@ -431,69 +497,6 @@ check_for_error() {
 log_error() {
 	echo "$1" > $LOG_ERROR_FILE
 	check_for_error
-}
-
-#######################################################################################
-#
-# Function log to std out and log file(s)
-#
-log() {
-	# if log has new lines, log each line separately
-	if [[ $1 == *$'\n'* ]]; then
-		local IFS=$'~'
-		for l in ${1//$'\n'/'~   '}; do
-			log "$l"
-		done
-		return
-	fi
-	# don't output blank lines
-	if [ -n "$1" ] && [ "$1" != "-> " ]; then
-
-		# logfile
-		date_line=$($DATE "$DATE_FORMAT")
-		line="$date_line $1"
-		if [ $QUIET = false ]; then
-			echo "$line"
-		fi
-		echo "$line" >> $LOG_FILE 2> /dev/null
-
-		# syslog
-		if [ $SYSLOG = true ]; then
-			line="$1"
-			#fix lines beginning w/ '->' as logger reads as cl option
-			if [ "->" == "${line:0:2}" ]; then
-				line="${line:2}"
-			fi
-			$LOGGER -t $(basename $0) "$line"
-		fi
-	fi
-}
-
-#######################################################################################
-#
-# Function execute notification commands file
-#
-execute_notification() {
-	if [ $NOTIFICATION_SENT = false ]; then
-		if [[ ( $NOTIFY_ON_SUCCESS == true || ( $NOTIFY_ON_ERROR == true && -s $LOG_ERROR_FILE ) ) ]]; then
-
-			# notification on error
-			if [[ $NOTIFY_ON_ERROR == true && "$NOTIFY_ERROR_COMMAND" != "" && -s $LOG_ERROR_FILE ]]; then
-				eval $NOTIFY_ERROR_COMMAND > /dev/null
-				[ $DEBUG = true ] && log "DEBUG: notification command executed $NOTIFY_ERROR_COMMAND"
-
-			# notification on success
-			else
-				if [[ $NOTIFY_ON_SUCCESS == true && "$NOTIFY_SUCCESS_COMMAND" != "" ]]; then
-					eval $NOTIFY_SUCCESS_COMMAND > /dev/null
-					[ $DEBUG = true ] && log "DEBUG: notification command executed $NOTIFY_SUCCESS_COMMAND"
-				fi
-			fi
-
-			# execute notification only once
-			NOTIFICATION_SENT=true
-		fi
-	fi
 }
 
 #######################################################################################
