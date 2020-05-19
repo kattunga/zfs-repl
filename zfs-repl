@@ -602,6 +602,9 @@ replicate_fs() {
 			let stringpos=$(expr index "$last_snap_target" @)
 			last_snap_target=$SRC_PATH@${last_snap_target:$stringpos}
 
+			[ $DEBUG = true ] && log "DEBUG: last source snapshot $last_snap_source"
+			[ $DEBUG = true ] && log "DEBUG: last target snapshot $last_snap_target"
+
 			if [ "$last_snap_target" != "$last_snap_source" ]; then
 				log "-> $last_snap_target $last_snap_source Incremental send."
 
