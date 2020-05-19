@@ -460,7 +460,11 @@ log() {
 
 		# to console
 		if [ $QUIET == false ]; then
-			echo "$line"
+			if [ "$2" == "2" ]; then
+				>&2 echo "$line"
+			else
+				echo "$line"
+			fi
 		fi
 
 		# to logfile
@@ -484,7 +488,7 @@ log() {
 #
 check_for_error() {
 	if [ -s "$LOG_ERROR_FILE" ]; then
-		log "$(cat $LOG_ERROR_FILE)"
+		log "$(cat $LOG_ERROR_FILE)" "2"
 		execute_notification
 		exit 1
 	fi
@@ -518,7 +522,8 @@ create_fs_snap() {
 #
 target_fs_exists() {
 	target_fs_name=$(ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -o name -H $TGT_PATH 2> $LOG_ERROR_FILE | tail -1 )
-	if [ -s "$LOG_ERROR_FILE" ]; 	then
+	if [ -s "$LOG_ERROR_FILE" ]; 	
+	then
 		path_error=$(grep "$TGT_PATH" $LOG_ERROR_FILE)
 		if [ "$path_error" == "" ]; 		then
 			check_for_error
