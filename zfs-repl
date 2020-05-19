@@ -456,19 +456,20 @@ log() {
 	if [ -n "$1" ] && [ "$1" != "" ]; then
 
 		date_line=$($DATE "$LOG_DATE_FORMAT")
-		line="$date_line $1"
 
 		# to console
 		if [ $QUIET == false ]; then
+
 			if [ "$2" == "2" ]; then
-				echo "$line" >&2 
+				echo "$date_line $1" >&2 
+				echo "$date_line \e[31m$1\e[0m"
 			else
-				echo "$line"
+				echo "$date_line $1"
 			fi
 		fi
 
 		# to logfile
-		echo "$line" >> $LOG_FILE 2> /dev/null
+		echo "$date_line $1" >> $LOG_FILE 2> /dev/null
 
 		# to syslog
 		if [ $SYSLOG == true ]; then
