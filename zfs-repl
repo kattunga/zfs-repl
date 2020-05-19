@@ -344,10 +344,10 @@ check_cmd() {
 	
 	case $sys in
 		source)
-			[ -x "${!var_name}" ] || log_error "-> ERROR: ${exec_name} not defined, not found, or not executable on source system.  Check ${var_name}= value in /etc/$(basename $0 .sh)/$(basename $0 .sh).conf. \'$opt_msg\' isn't available with current configuration!"
+			[ -x "${!var_name}" ] || log_error "ERROR: ${exec_name} not defined, not found, or not executable on source system.  Check ${var_name}= value in /etc/$(basename $0 .sh)/$(basename $0 .sh).conf. \'$opt_msg\' isn't available with current configuration!"
 			;;
 		target)
-			[ -z "${!var_name}" ] && log_error "-> ERROR: ${exec_name} is not defined for target system. Check ${var_name}= value in /etc/$(basename $0 .sh)/${TGT_HOST}.conf. '$opt_msg' isn't available with current configuration!"
+			[ -z "${!var_name}" ] && log_error "ERROR: ${exec_name} is not defined for target system. Check ${var_name}= value in /etc/$(basename $0 .sh)/${TGT_HOST}.conf. '$opt_msg' isn't available with current configuration!"
 			;;
 	esac
 
@@ -453,7 +453,7 @@ log() {
 	fi
 
 	# don't output blank lines
-	if [ -n "$1" ] && [ "$1" != "-> " ]; then
+	if [ -n "$1" ] && [ "$1" != "" ]; then
 
 		date_line=$($DATE "$LOG_DATE_FORMAT")
 		line="$date_line $1"
@@ -509,9 +509,9 @@ log_error() {
 #
 create_fs_snap() {
 	SnapName="$SNAP_PREF$($DATE +%Y%m%d%H%M%S)"
-	log "-> $SRC_PATH@$SnapName Snapshot creation."
+	log "$SRC_PATH@$SnapName Snapshot creation."
 	output=$( $ZFS snapshot $RECURSIVE_SNAP $SRC_PATH\@$SnapName 2> $LOG_ERROR_FILE )
-	log "-> $output"
+	log "$output"
 	check_for_error
 }
 
@@ -521,15 +521,17 @@ create_fs_snap() {
 # variable target_fs_name.
 #
 target_fs_exists() {
-	target_fs_name=$(ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -o name -H $TGT_PATH 2> $LOG_ERROR_FILE | tail -1 )
+	[ $DEBUG = true ] && log "DEBUG: ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -o name -H $TGT_PATH 2> $LOG_ERROR_FILE | tail -1"
+	target_fs_name=$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -o name -H $TGT_PATH 2> $LOG_ERROR_FILE | tail -1 )
 	if [ -s "$LOG_ERROR_FILE" ]; 	
 	then
 		path_error=$(grep "$TGT_PATH" $LOG_ERROR_FILE)
-		if [ "$path_error" == "" ]; 		then
+		if [ "$path_error" == "" ];
+ 		then
 			check_for_error
 		else
 			rm $LOG_ERROR_FILE
-			log "-> $TGT_PATH file system does not exist on target host $TGT_HOST."
+			log "$TGT_PATH file system does not exist on target host $TGT_HOST."
 		fi
 	fi
 }
@@ -540,6 +542,7 @@ target_fs_exists() {
 # both the source and destination hosts.
 #
 check_last_source_snap() {
+	[ $DEBUG = true ] && log "DEBUG: $ZFS list -o name -t snapshot -H 2> $LOG_ERROR_FILE | grep $SRC_PATH\@$SNAP_PREF | tail -1"
 	last_snap_source=$( $ZFS list -o name -t snapshot -H 2> $LOG_ERROR_FILE | grep $SRC_PATH\@$SNAP_PREF | tail -1 )
 	check_for_error
 	if [ "$last_snap_source" == "" ]
@@ -554,6 +557,7 @@ check_last_source_snap() {
 # both the source and destination hosts.
 #
 check_last_target_snap() {
+	[ $DEBUG = true ] && log "DEBUG: ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -H -o name -r -t snapshot 2> $LOG_ERROR_FILE | grep $TGT_PATH\@ | tail -1"
 	last_snap_target=$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS list -H -o name -r -t snapshot 2> $LOG_ERROR_FILE | grep $TGT_PATH\@ | tail -1 )
 	check_for_error
 	if [ "$last_snap_target" == "" ]
@@ -581,14 +585,14 @@ replicate_fs() {
 	case $action in 
 		init)
 			# create and replicate source to target
-			log "-> $last_snap_source Initial replication."
+			log "$last_snap_source Initial replication."
 			[ $DEBUG = true ] && log "DEBUG: ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS create $ZFS_CREATE_OPTS -p $TGT_PATH"
-			log "-> $( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS create $ZFS_CREATE_OPTS -p $TGT_PATH 2> $LOG_ERROR_FILE )"
+			log "$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS create $ZFS_CREATE_OPTS -p $TGT_PATH 2> $LOG_ERROR_FILE )"
 			check_for_error
 			
 			if [ $MOUNT = false ]; then
 			    [ $DEBUG = true ] && log "DEBUG: ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS set mountpoint=none $TGT_PATH"
-			    log "-> $( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS set mountpoint=none $TGT_PATH 2> $LOG_ERROR_FILE )"
+			    log "$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS set mountpoint=none $TGT_PATH 2> $LOG_ERROR_FILE )"
 			    check_for_error
 			fi
 
@@ -602,16 +606,16 @@ replicate_fs() {
 			let stringpos=$(expr index "$last_snap_target" @)
 			last_snap_target=$SRC_PATH@${last_snap_target:$stringpos}
 
-			[ $DEBUG = true ] && log "DEBUG: last source snapshot $last_snap_source"
-			[ $DEBUG = true ] && log "DEBUG: last target snapshot $last_snap_target"
+			[ $DEBUG = true ] && log "last source snapshot $last_snap_source"
+			[ $DEBUG = true ] && log "last target snapshot $last_snap_target"
 
 			if [ "$last_snap_target" != "$last_snap_source" ]; then
-				log "-> $last_snap_target $last_snap_source Incremental send."
+				log "$last_snap_target $last_snap_source Incremental send."
 
 				ZFS_SEND="$ZFS send $ZFS_SEND_COMPRESS $RECURSIVE_REPL -I  $last_snap_target $last_snap_source"
 				ZFS_RECV="$RMT_ZFS recv $VERBOSE $FORCE_RECV $TGT_PATH"
 			else
-				log "-> Up to date."
+				log "replication up to date."
 				return
 			fi
 			;;
@@ -625,7 +629,7 @@ replicate_fs() {
 			if [ $DEBUG = true ]; then
 				log "DEBUG: $SRC_PIPELINE_CMDS"
 			fi
-			log "-> $( eval $SRC_PIPELINE_CMDS 2> $LOG_ERROR_FILE )"
+			log "$( eval $SRC_PIPELINE_CMDS 2> $LOG_ERROR_FILE )"
 			;;
 			
 		SSHMBUFFER)
@@ -634,7 +638,7 @@ replicate_fs() {
 			if [ $DEBUG = true ]; then
 				log "DEBUG: $SRC_PIPELINE_CMDS"
 			fi
-			log "-> $( eval $SRC_PIPELINE_CMDS 2> $LOG_ERROR_FILE )"
+			log "$( eval $SRC_PIPELINE_CMDS 2> $LOG_ERROR_FILE )"
 			;;
 
 		MBUFFER)
@@ -654,7 +658,7 @@ replicate_fs() {
 
 			# start 'zfs receive' pipeline
 			#  pipeline echos '---' to stderr (i.e. $LOG_ERROR_FILE) to indicate ready to start
-			log "-> $(ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT "echo '---' 1>&2; eval $DST_PIPELINE_CMDS" 2>> $LOG_ERROR_FILE)"
+			log "$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT "echo '---' 1>&2; eval $DST_PIPELINE_CMDS" 2>> $LOG_ERROR_FILE )"
 			replication_status finished
 			
 			# remove start indicator (i.e. "---") for $LOG_ERROR_FILE
@@ -746,8 +750,8 @@ clean_remote_snaps() {
 		fi
 
 		if [ $FORCE_CLEAN == true ] || [ $(echo $ssnap_list | grep -c ${SnapName}) -eq 0 ]; then
-			log "-> Destroying snapshot $dsnap on $TGT_HOST because not in source"
-			log "-> $(ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS destroy $dsnap)"
+			log "Destroying snapshot $dsnap on $TGT_HOST because not in source"
+			log "$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS destroy $dsnap )"
 		fi
 
 	done < $DSNAP_LIST
@@ -792,7 +796,7 @@ clone_source_last_snap() {
 			if [ "$clone_source" == "-" ]; then
 				log_error "A source filesystem exist with same name as required clone"
 			else
-				log "-> Destroying existing clone"
+				log "Destroying existing clone"
 				$ZFS destroy $SRC_CLONE 2> $LOG_ERROR_FILE
 				check_for_error
 				clone_exists=""
@@ -801,7 +805,7 @@ clone_source_last_snap() {
 
 		# if not exists, clone now
 		if [ "$clone_exists" != "$SRC_CLONE" ]; then
-			log "-> Creating source clone $SRC_CLONE $SRC_CLONE_OPTS"
+			log "Creating source clone $SRC_CLONE $SRC_CLONE_OPTS"
 			$ZFS clone $last_snap_source $SRC_CLONE $SRC_CLONE_OPTS 2> $LOG_ERROR_FILE
 			check_for_error
 		fi
@@ -843,7 +847,7 @@ clone_remote_last_snap() {
 			if [ "$clone_source" == "-" ]; then
 				log_error "A target filesystem exist with same name as required clone"
 			else
-				log "-> Destroying existing clone"
+				log "Destroying existing clone"
 				ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS destroy $TGT_CLONE 2> $LOG_ERROR_FILE
 				check_for_error
 				clone_exists=""
@@ -852,7 +856,7 @@ clone_remote_last_snap() {
 
 		# if not exists, clone now
 		if [ "$clone_exists" != "$TGT_CLONE" ]; then
-			log "-> Creating target clone $TGT_CLONE $TGT_CLONE_OPTS"
+			log "Creating target clone $TGT_CLONE $TGT_CLONE_OPTS"
 			ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS clone $last_snap_target $TGT_CLONE $TGT_CLONE_OPTS 2> $LOG_ERROR_FILE
 			check_for_error
 		fi
@@ -880,8 +884,8 @@ clean_old_snaps() {
 			if [ $( echo ${SnapDateTime} | grep -c '^[0-9]*$' ) -eq 1 ] && [ ${#SnapDateTime} -eq 14 ]; then
 				if [ $RetainDateTime -gt $SnapDateTime ]
 				then
-					log "-> Destroying snapshot $snaps on localhost"
-					log "-> $($ZFS destroy $RECURSIVE_SNAP $snaps)"
+					log "Destroying snapshot $snaps on localhost"
+					log "$($ZFS destroy $RECURSIVE_SNAP $snaps)"
 				fi
 			fi
 		fi
@@ -905,8 +909,8 @@ clean_old_snaps() {
 			#  need to ensure $SnapDateTime is numeric for comparison to $RetainDateTime
 			if [ $( echo ${SnapDateTime} | grep -c '^[0-9]*$' ) -eq 1 ] && [ ${#SnapDateTime} -eq 14 ]; then
 				if [ $RetainDateTime -gt $SnapDateTime ]; then
-					log "-> Destroying snapshot $TGT_PATH@$SNAP_PREF$SnapDateTime on $TGT_HOST"
-					log "-> $(ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS destroy $RECURSIVE_SNAP $TGT_PATH\@$SNAP_PREF$SnapDateTime)"
+					log "Destroying snapshot $TGT_PATH@$SNAP_PREF$SnapDateTime on $TGT_HOST"
+					log "$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS destroy $RECURSIVE_SNAP $TGT_PATH\@$SNAP_PREF$SnapDateTime )"
 				fi
 			fi
 		done < $DSNAP_LIST
@@ -1110,6 +1114,8 @@ echo "Replication of $SRC_PATH to $TGT_HOST ok" > $LOG_SUCCESS_FILE
 on_exit_run replication_status
 on_exit_run execute_notification
 [ $DEBUG = false ] && on_exit_run rm -rf $TMP_PATH
+on_exit_run rm -f $LOCK_FILE
+on_exit_run	log "end-------------------------------------------------------------"
 
 # check and complete parameters
 if [ -z $SRC_PATH ]; then
@@ -1140,8 +1146,8 @@ fi
 
 # Check if replication is running
 if [ -e "$LOCK_FILE" ]; then
-	log_error "-> ERROR: replication is currently running."
-	exit
+	log_error "ERROR: replication is currently running."
+	exit 1
 fi
 
 # check we have commands to run options specified
@@ -1154,12 +1160,6 @@ if [ $? -gt 0 ]; then
 	exit 1
 fi
 echo $$ > $LOCK_FILE
-
-# register exit/clean up tasks
-on_exit_run rm -f $LOCK_FILE
-
-# final message
-on_exit_run	log "end-------------------------------------------------------------"
 
 #Create a new snapshot of the path spec.
 if [ $SNAPSHOT == true ]; then
@@ -1176,7 +1176,7 @@ if [ $REPLICATE == true ]; then
 		if [ $CREATEFS == true ]; then
 			replicate_fs init
 		else
-			log "-> Use option -z|--create-dest to create file system in target host"
+			log "Use option -z|--create-dest to create file system in target host"
 		fi
 	else
 		# Clean up any snapshots in target that is not in source
