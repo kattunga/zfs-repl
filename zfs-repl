@@ -597,7 +597,7 @@ replicate_fs() {
 			log "$last_snap_source Initial replication."
 
 			ZFS_SEND="$ZFS send -p $ZFS_SEND_COMPRESS $RECURSIVE_REPL $last_snap_source"
-			ZFS_RECV="$RMT_ZFS recv $VERBOSE -F $TGT_PATH"
+			ZFS_RECV="$RMT_ZFS recv $VERBOSE $FORCE_RECV $TGT_PATH"
 			;;		
 		repl)
 			# replicate source to target
