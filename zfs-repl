@@ -185,6 +185,7 @@ LOGGER=
 MBUFFER=
 DATE=
 SHUF=
+PV=
 
 #target host bins
 RMT_ZFS=
@@ -204,7 +205,6 @@ SNAP_PREF=
 MAX_TIME=
 RMT_MAX_TIME=
 VERBOSE=
-MOUNT=false
 CLEAN=false
 INVERT_CLEAN=false
 CLEAN_AFTER=false
@@ -216,6 +216,7 @@ REPLICATE=true
 CREATEFS=false
 QUIET=false
 DEBUG=false
+PROGRESS=false
 STATS=false
 ZFS_CREATE_OPTS=
 FORCE_RECV=
@@ -304,11 +305,10 @@ usage() {
 	echo "  -n --no-snap            do not snapshot"
 	echo "  -r --no-repl            do not replicate"
 	echo "  -z --create-dest        create target file system/dataset if not exists"
-	echo "     --mount-dest         leave mountpoint untouched in target"
 	echo "  -o --protocol           replication transport protocol"
-	echo "      SSH                 Secure. Recomended for low latency and stable wan"
-	echo "      SSHMBUFFER          Secure, has buffering. Recommended for high latency wan"
-	echo "      MBUFFER             Insecure. Require a TCP port for replication. Recommended for private lan or vpn"
+	echo "         SSH              Secure. Recomended for low latency and stable wan"
+	echo "         SSHMBUFFER       Secure, has buffering. Recommended for high latency wan"
+	echo "         MBUFFER          Insecure. Require a TCP port for replication. Recommended for private lan or vpn"
 	echo "  -P --mbuffer-port       replication port for MBUFFER protocol. (default: auto)"
 	echo "  -q --quiet              quiet. suppress output to stdout. usefull for cron jobs"
 	echo "     --notify-errors      execute notification command on errors"
@@ -369,7 +369,11 @@ launch_check() {
 	fi
 
 	# Check if needed commands for replication are available
-	#	
+	#
+	if [ $REPLICATE == true ]; then
+		check_cmd "source" "PV"
+	fi
+
 	PROTOCOL=${PROTOCOL^^}
 	case $PROTOCOL in
 		SSHMBUFFER)
@@ -591,17 +595,8 @@ replicate_fs() {
 		init)
 			# create and replicate source to target
 			log "$last_snap_source Initial replication."
-			[ $DEBUG = true ] && log "DEBUG: ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS create $ZFS_CREATE_OPTS -p $TGT_PATH"
-			log "$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS create $ZFS_CREATE_OPTS -p $TGT_PATH 2> $LOG_ERROR_FILE )"
-			check_for_error
-			
-			if [ $MOUNT = false ]; then
-			    [ $DEBUG = true ] && log "DEBUG: ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS set mountpoint=none $TGT_PATH"
-			    log "$( ssh $SSH_OPTS -n $SSH_TGT_HOST $SSH_TGT_PORT $RMT_ZFS set mountpoint=none $TGT_PATH 2> $LOG_ERROR_FILE )"
-			    check_for_error
-			fi
 
-			ZFS_SEND="$ZFS send $ZFS_SEND_COMPRESS $RECURSIVE_REPL $last_snap_source"
+			ZFS_SEND="$ZFS send -p $ZFS_SEND_COMPRESS $RECURSIVE_REPL $last_snap_source"
 			ZFS_RECV="$RMT_ZFS recv $VERBOSE -F $TGT_PATH"
 			;;		
 		repl)
@@ -629,10 +624,16 @@ replicate_fs() {
 			;;
 	esac
 
+	if [ $PROGRESS == true ]; then
+		PROGRESS_CMD = "| $PV"
+	else
+		PROGRESS_CMD = ""
+	fi
+
 	case "$PROTOCOL" in
 		# using ssh (for remote networks)
 		SSH)
-			SRC_PIPELINE_CMDS="$ZFS_SEND | ssh $SSH_OPTS $SSH_TGT_HOST $SSH_TGT_PORT \"$ZFS_RECV\""
+			SRC_PIPELINE_CMDS="$ZFS_SEND $PROGRESS_CMD | ssh $SSH_OPTS $SSH_TGT_HOST $SSH_TGT_PORT \"$ZFS_RECV\""
 
 			if [ $DEBUG = true ]; then
 				log "DEBUG: $SRC_PIPELINE_CMDS"
@@ -641,7 +642,7 @@ replicate_fs() {
 			;;
 			
 		SSHMBUFFER)
-			SRC_PIPELINE_CMDS="$ZFS_SEND | $MBUFFER $MBUFFER_OPTS | ssh $SSH_OPTS $SSH_TGT_HOST $SSH_TGT_PORT \"$RMT_MBUFFER $RMT_MBUFFER_OPTS | $ZFS_RECV\""
+			SRC_PIPELINE_CMDS="$ZFS_SEND | $MBUFFER $MBUFFER_OPTS $PROGRESS_CMD | ssh $SSH_OPTS $SSH_TGT_HOST $SSH_TGT_PORT \"$RMT_MBUFFER $RMT_MBUFFER_OPTS | $ZFS_RECV\""
 
 			if [ $DEBUG = true ]; then
 				log "DEBUG: $SRC_PIPELINE_CMDS"
@@ -650,7 +651,7 @@ replicate_fs() {
 			;;
 
 		MBUFFER)
-			SRC_PIPELINE_CMDS=$ZFS_SEND | $MBUFFER $MBUFFER_OPTS -O $TGT_HOST:$MBUFFER_PORT
+			SRC_PIPELINE_CMDS=$ZFS_SEND $PROGRESS_CMD | $MBUFFER $MBUFFER_OPTS -O $TGT_HOST:$MBUFFER_PORT 
 			DST_PIPELINE_CMDS=$RMT_MBUFFER $RMT_MBUFFER_OPTS -I $MBUFFER_PORT | $ZFS_RECV
 
 			if [ $DEBUG = true ]; then
@@ -1006,9 +1007,6 @@ while [ $# -gt 0 ];do
              fi
              
              ;;
-         --mount-dest)
-            MOUNT=true
-            ;;
          -O|--dest-opt)
          	shift
          	if [[ $1 == *=* ]]; then
@@ -1081,8 +1079,11 @@ while [ $# -gt 0 ];do
          -q|--quiet)
          	QUIET=true
          	;;
-         -D|--debug)
+         --debug)
             DEBUG=true
+            ;;
+         --progress)
+            PROGRESS=true
             ;;
          -R|--recurse)
      		RECURSIVE_SNAP='-r'
@@ -1107,6 +1108,12 @@ src_path_hash=${SRC_PATH//\//#}
 
 # lock file to avoid concurrent replication
 LOCK_FILE=$LOCK_PATH/$(basename $0 .sh)-${src_path_hash}
+
+# Check if replication is running
+if [ -e "$LOCK_FILE" ]; then
+	log_error "ERROR: replication is currently running."
+	exit 1
+fi
 
 # create isolated tmp directory
 mkdir -p $TMP_PATH > /dev/null 2>&1
@@ -1150,12 +1157,6 @@ if [[ ($REPLICATE == true) ]]; then
 	if [ -z "$RMT_MAX_TIME" ]; then
 		RMT_MAX_TIME="$MAX_TIME"
 	fi
-fi
-
-# Check if replication is running
-if [ -e "$LOCK_FILE" ]; then
-	log_error "ERROR: replication is currently running."
-	exit 1
 fi
 
 # check we have commands to run options specified

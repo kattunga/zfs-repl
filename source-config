@@ -95,8 +95,8 @@ test_date() {
 }
 
 # set rmt commands too as default
-declare -a VARS=('SUDO=%s' 'ZFS="$SUDO %s"' 'MBUFFER=%s' 'CAT=%s' 'LOGGER=%s' 'SHUF=%s' 'DATE=%s' 'RMT_SUDO=%s' 'RMT_ZFS="$RMT_SUDO %s"' 'RMT_MBUFFER=%s')
-EXECS="sudo zfs mbuffer cat logger shuf date sudo zfs mbuffer"
+declare -a VARS=('SUDO=%s' 'ZFS="$SUDO %s"' 'MBUFFER=%s' 'CAT=%s' 'LOGGER=%s' 'SHUF=%s' 'DATE=%s' 'PV=%s' 'RMT_SUDO=%s' 'RMT_ZFS="$RMT_SUDO %s"' 'RMT_MBUFFER=%s')
+EXECS="sudo zfs mbuffer cat logger shuf date pv sudo zfs mbuffer"
 BINS=
 
 CONFIG="# commands path for $BIN_NAME"$'\n'
