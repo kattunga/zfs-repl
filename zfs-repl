@@ -185,7 +185,6 @@ LOGGER=
 MBUFFER=
 DATE=
 SHUF=
-PV=
 
 #target host bins
 RMT_ZFS=
@@ -216,7 +215,6 @@ REPLICATE=true
 CREATEFS=false
 QUIET=false
 DEBUG=false
-PROGRESS=false
 STATS=false
 ZFS_CREATE_OPTS=
 FORCE_RECV=
@@ -370,10 +368,6 @@ launch_check() {
 
 	# Check if needed commands for replication are available
 	#
-	if [ $REPLICATE == true ]; then
-		check_cmd "source" "PV" "pv"
-	fi
-
 	PROTOCOL=${PROTOCOL^^}
 	case $PROTOCOL in
 		SSHMBUFFER)
@@ -624,16 +618,10 @@ replicate_fs() {
 			;;
 	esac
 
-	if [ $PROGRESS == true ]; then
-		PROGRESS_CMD="| $PV"
-	else
-		PROGRESS_CMD=""
-	fi
-
 	case "$PROTOCOL" in
 		# using ssh (for remote networks)
 		SSH)
-			SRC_PIPELINE_CMDS="$ZFS_SEND $PROGRESS_CMD | ssh $SSH_OPTS $SSH_TGT_HOST $SSH_TGT_PORT \"$ZFS_RECV\""
+			SRC_PIPELINE_CMDS="$ZFS_SEND | ssh $SSH_OPTS $SSH_TGT_HOST $SSH_TGT_PORT \"$ZFS_RECV\""
 
 			if [ $DEBUG = true ]; then
 				log "DEBUG: $SRC_PIPELINE_CMDS"
@@ -642,7 +630,7 @@ replicate_fs() {
 			;;
 			
 		SSHMBUFFER)
-			SRC_PIPELINE_CMDS="$ZFS_SEND | $MBUFFER $MBUFFER_OPTS $PROGRESS_CMD | ssh $SSH_OPTS $SSH_TGT_HOST $SSH_TGT_PORT \"$RMT_MBUFFER $RMT_MBUFFER_OPTS | $ZFS_RECV\""
+			SRC_PIPELINE_CMDS="$ZFS_SEND | $MBUFFER $MBUFFER_OPTS | ssh $SSH_OPTS $SSH_TGT_HOST $SSH_TGT_PORT \"$RMT_MBUFFER $RMT_MBUFFER_OPTS | $ZFS_RECV\""
 
 			if [ $DEBUG = true ]; then
 				log "DEBUG: $SRC_PIPELINE_CMDS"
@@ -651,7 +639,7 @@ replicate_fs() {
 			;;
 
 		MBUFFER)
-			SRC_PIPELINE_CMDS="$ZFS_SEND $PROGRESS_CMD | $MBUFFER $MBUFFER_OPTS -O $TGT_HOST:$MBUFFER_PORT"
+			SRC_PIPELINE_CMDS="$ZFS_SEND | $MBUFFER $MBUFFER_OPTS -O $TGT_HOST:$MBUFFER_PORT"
 			DST_PIPELINE_CMDS="$RMT_MBUFFER $RMT_MBUFFER_OPTS -I $MBUFFER_PORT | $ZFS_RECV"
 
 			if [ $DEBUG = true ]; then
@@ -1042,9 +1030,6 @@ while [ $# -gt 0 ];do
          		usage
          	fi
             ;;
-         -v|--verbose)
-            VERBOSE=-v
-            ;;
          -c|--clean-snaps)
             CLEAN=true
             ;;
@@ -1076,14 +1061,14 @@ while [ $# -gt 0 ];do
          -z|--create-dest)
             CREATEFS=true
             ;;
+         -v|--verbose)
+            VERBOSE=-v
+            ;;
          -q|--quiet)
          	QUIET=true
          	;;
          --debug)
             DEBUG=true
-            ;;
-         --progress)
-            PROGRESS=true
             ;;
          -R|--recurse)
      		RECURSIVE_SNAP='-r'
