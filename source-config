@@ -141,7 +141,7 @@ NOTIFY_ERROR_COMMAND=""
 # log to syslog (true/false)
 SYSLOG=true
 
-#date format used in log file
+# date format used in log file
 # see 'man date' or 'info date' for options
 LOG_DATE_FORMAT="+%Y-%m-%d %H:%M:%S"
 
