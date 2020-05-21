@@ -371,7 +371,7 @@ launch_check() {
 	# Check if needed commands for replication are available
 	#
 	if [ $REPLICATE == true ]; then
-		check_cmd "source" "PV"
+		check_cmd "source" "PV" "pv"
 	fi
 
 	PROTOCOL=${PROTOCOL^^}
